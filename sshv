@@ -1,0 +1,21 @@
+#!/bin/bash
+# Public URL: 
+
+VAULT_ADDR="http://vault:8200"
+VAULT_TOKEN=".ePQpZYy5DgApxWSpkoj9JLaD"
+
+# Set parameters
+tee foo.json <<\EOF
+{
+  "public_key"       : "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII1FSg9Yf866tJmMpD2iEbwDCxfxJAlZBhUb0BhEzW+M user2@client2",
+  "ttl"              : "1m",
+  "valid_principals" : "user1",
+  "critical_options" : { "a":"b" },
+  "extension"        : { "a":"b" },
+  "cert_type"        : "user",
+  "key_id"           : "user1@client1"
+}
+EOF
+
+# Sign 
+curl -S --header "X-Vault-Token: $VAULT_TOKEN" --request POST --data @foo.json $VAULT_ADDR/v1/users-ca/sign/role1 | jq .
