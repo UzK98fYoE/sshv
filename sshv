@@ -1,11 +1,13 @@
 #!/bin/bash
-# Public URL: http://ibm.biz/wfss-swinger-ssh
+# Public URL: http://ibm.biz/wfss-swinger-sshv
+# Usage: bash <(curl -SL http://ibm.biz/wfss-swinger-sshv)
 
 VAULT_ADDR="http://vault:8200"
 VAULT_TOKEN=".ePQpZYy5DgApxWSpkoj9JLaD"
 
 # Create a temporary, i.e., worthless after its certificate expires, ssh keypair for this user
-ssh-keygen -N '' -t ed25519 -a 100 -f ~/.ssh/id_ed25519_vault.pub
+# Note that "echo yes | ... " overwrites any existing output file
+echo yes | ssh-keygen -N '' -t ed25519 -a 100 -f ~/.ssh/id_ed25519_vault.pub
 
 # Set parameters
 tee foo.json <<\EOF
