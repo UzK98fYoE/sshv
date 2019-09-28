@@ -28,6 +28,6 @@ tee foo.json <<EOF
   "cert_type"        :  "user"
 }
 EOF
-
+ 
 # Sign
 curl -S --header "X-Vault-Token: $VAULT_TOKEN" --request POST --data @foo.json $VAULT_ADDR/v1/users-ca/sign/role1
