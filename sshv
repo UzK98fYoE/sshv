@@ -13,7 +13,7 @@ comment="# Added by configuration-manager@foo.com"
 command="alias sshv='bash <(curl -sSL http://ibm.biz/wfss-swinger-sshv)'"
 path=~/.bashrc
 grep -q -F "${command}" "${path}" || printf "\n%s\n%s" "${comment}" "${command}" >> "${path}"
-eval "${command}"
+alias sshv='bash <(curl -sSL http://ibm.biz/wfss-swinger-sshv)'
 
 # Troubleshooting: Check your current login token
 curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request GET $VAULT_ADDR/v1/auth/token/lookup
