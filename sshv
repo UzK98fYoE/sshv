@@ -6,7 +6,7 @@ VAULT_ADDR="http://vault:8200"
 VAULT_TOKEN="s.ePQpZYy5DgApxWSpkoj9JLaD"
 
 # Troubleshooting: Check your current login token
-curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request GET $VAULT_ADDR/v1/auth/token/looku
+curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request GET $VAULT_ADDR/v1/auth/token/lookup
 
 # Create a temporary, i.e., worthless after its certificate expires, ssh keypair for this user
 # Note that "echo yes | ... " overwrites any existing output file
