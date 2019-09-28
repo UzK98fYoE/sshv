@@ -39,7 +39,7 @@ curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request POST \
 
 # Automatically try using that cert on new connections
 comment="# Added by configuration-manager@foo.com"
-keyword_pair='IdentityFile ~/.ssh/id_rsa_vault-cert'
+keyword_pair='IdentityFile ~/.ssh/id_rsa_vault'
 path=~/.ssh/config
 grep -q -F "${keyword_pair}" "${path}" || printf "\n%s\n%s" "${comment}" "${keyword_pair}" >> "${path}"
 
