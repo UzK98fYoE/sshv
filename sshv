@@ -1,13 +1,19 @@
 #!/bin/bash
 # Public URL: http://ibm.biz/wfss-swinger-sshv
 # Usage: bash <(curl -sSL http://ibm.biz/wfss-swinger-sshv)
-# Create "sshv" command: eval $(tee -a ~/.bashrc <<< "alias sshv='bash <(curl -sSL http://ibm.biz/wfss-swinger-sshv)'")
 
 VAULT_ADDR="http://vault:8200"
 VAULT_TOKEN="s.ePQpZYy5DgApxWSpkoj9JLaD"
 
 # Prereqs
 if jq -V >/dev/null; then true; else echo "Please install jq first"; exit 1; fi
+
+# Make "sshv" run the script
+comment="# Added by configuration-manager@foo.com"
+command="alias sshv='bash <(curl -sSL http://ibm.biz/wfss-swinger-sshv)'"
+path=~/.bashrc
+grep -q -F "${command}" "${path}" || printf "\n%s\n%s" "${comment}" "${command}" >> "${path}"
+eval "${command}"
 
 # Troubleshooting: Check your current login token
 curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request GET $VAULT_ADDR/v1/auth/token/lookup
