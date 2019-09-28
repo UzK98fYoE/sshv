@@ -12,7 +12,7 @@ if jq -V >/dev/null; then true; else echo "Please install jq first"; exit 1; fi
 comment="# Added by configuration-manager@foo.com"
 command="alias sshv='bash <(curl -sSL http://ibm.biz/wfss-swinger-sshv)'"
 path=~/.bashrc
-grep -q -F "${command}" "${path}" || { printf "\n%s\n%s" "${comment}" "${command}" >> "${path}"; echo "To make sshv a command, log out and back in again or type this: source \~/.bashrc"; }
+grep -q -F "${command}" "${path}" || { printf "\n%s\n%s" "${comment}" "${command}" >> "${path}"; echo "ssh installed. To use it, open a new bash login shell or, to use it immediately, type this now: source ~/.bashrc"; }
 
 # Troubleshooting: Check your current login token
 curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request GET $VAULT_ADDR/v1/auth/token/lookup
@@ -25,7 +25,7 @@ curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request GET $VAULT_ADDR/v1/aut
 echo yes | ssh-keygen -N '' -t rsa -b 4096 -a 100 -f ~/.ssh/id_rsa_vault
 
 # Set parameters
-tee foo.json <<EOF
+tee foo.json >/dev/null <<EOF
 {
   "public_key"       :  "$(cat ~/.ssh/id_rsa_vault.pub | tr '\n' '*' | sed 's/\*/\\n/g')",
   "ttl"              :  "1m",
@@ -48,3 +48,6 @@ comment="# Added by configuration-manager@foo.com"
 keyword_pair='IdentityFile ~/.ssh/id_rsa_vault'
 path=~/.ssh/config
 grep -q -F "${keyword_pair}" "${path}" || printf "\n%s\n%s" "${comment}" "${keyword_pair}" >> "${path}"
+
+# Instructions
+echo "Success. Try something like: ssh user1@sshserver"
