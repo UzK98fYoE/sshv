@@ -1,9 +1,12 @@
 #!/bin/bash
 # Public URL: http://ibm.biz/wfss-swinger-sshv
-# Usage: bash <(curl -SL http://ibm.biz/wfss-swinger-sshv)
+# Usage: bash <(curl -sSL http://ibm.biz/wfss-swinger-sshv)
 
 VAULT_ADDR="http://vault:8200"
-VAULT_TOKEN=".ePQpZYy5DgApxWSpkoj9JLaD"
+VAULT_TOKEN="s.ePQpZYy5DgApxWSpkoj9JLaD"
+
+# Troubleshooting: Check your current login token
+curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request GET $VAULT_ADDR/v1/auth/token/looku
 
 # Create a temporary, i.e., worthless after its certificate expires, ssh keypair for this user
 # Note that "echo yes | ... " overwrites any existing output file
@@ -12,7 +15,7 @@ echo yes | ssh-keygen -N '' -t ed25519 -a 100 -f ~/.ssh/id_ed25519_vault.pub
 # Set parameters
 tee foo.json <<\EOF
 {
-  "public_key"       :  "$(cat ~/.ssh/id_ed25519_vault.pub)",
+  "public_key"       :  "$(cat ~/.ssh/id_ed25519_vault.pub | tr '\n' '*' | sed 's/\*/\\n/g')",
   "ttl"              :  "1m",
   "valid_principals" :  "user1",
   "cert_type"        :  "user",
