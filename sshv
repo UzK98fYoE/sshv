@@ -13,7 +13,7 @@ curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request GET $VAULT_ADDR/v1/aut
 echo yes | ssh-keygen -N '' -t ed25519 -a 100 -f ~/.ssh/id_ed25519_vault.pub
 
 # Set parameters
-tee foo.json <<\EOF
+tee foo.json <<EOF
 {
   "public_key"       :  "$(cat ~/.ssh/id_ed25519_vault.pub | tr '\n' '*' | sed 's/\*/\\n/g')",
   "ttl"              :  "1m",
@@ -27,4 +27,4 @@ tee foo.json <<\EOF
 EOF
 
 # Sign
-curl -S --header "X-Vault-Token: $VAULT_TOKEN" --request POST --data @foo.json $VAULT_ADDR/v1/users-ca/sign/role1 | jq .
+curl -S --header "X-Vault-Token: $VAULT_TOKEN" --request POST --data @foo.json $VAULT_ADDR/v1/users-ca/sign/role1
