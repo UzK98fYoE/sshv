@@ -5,6 +5,9 @@
 VAULT_ADDR="http://vault:8200"
 VAULT_TOKEN="s.ePQpZYy5DgApxWSpkoj9JLaD"
 
+# Prereqs
+if jq -V >/dev/null; then true; else echo "Please install jq first"; exit 1; fi
+
 # Troubleshooting: Check your current login token
 curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request GET $VAULT_ADDR/v1/auth/token/lookup
 
@@ -13,7 +16,7 @@ curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request GET $VAULT_ADDR/v1/aut
 # vault can't handle ed25519 currently because it expects openssl PEM, not openssh format
 # details: https://github.com/ssh-vault/ssh-vault/issues/37
 # echo yes | ssh-keygen -N '' -t ed25519 -a 100 -f ~/.ssh/id_ed25519_vault.pub
-echo yes | ssh-keygen -N '' -t rsa -b 4096 -a 100 -f ~/.ssh/id_rsa_vault.pub
+echo yes | ssh-keygen -N '' -t rsa -b 4096 -a 100 -f ~/.ssh/id_rsa_vault
 
 # Set parameters
 tee foo.json <<EOF
@@ -28,6 +31,16 @@ tee foo.json <<EOF
   "cert_type"        :  "user"
 }
 EOF
- 
+
 # Sign
-curl -S --header "X-Vault-Token: $VAULT_TOKEN" --request POST --data @foo.json $VAULT_ADDR/v1/users-ca/sign/role1
+curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request POST \
+     --data @foo.json $VAULT_ADDR/v1/users-ca/sign/role1 |\
+     jq -r ".data.signed_key" > ~/.ssh/id_rsa_vault-cert.pub
+
+# Automatically try using that cert on new connections
+comment="# Added by configuration-manager@foo.com"
+keyword_pair='IdentityFile ~/.ssh/id_rsa_vault-cert'
+path=~/.ssh/config
+grep -q -F "${keyword_pair}" "${path}" || printf "\n%s\n%s" "${comment}" "${keyword_pair}" >> "${path}"
+
+
