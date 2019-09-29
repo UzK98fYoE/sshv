@@ -33,7 +33,7 @@ tee foo.json >/dev/null <<EOF
   "valid_principals" :  "user1",
   "cert_type"        :  "user",
   "key_id"           :  "user1@client1 created by sshv",
-  "critical_options" :  {  },
+  "critical_options" :  { "force-command": "echo This is a single-purpose key. To change that, remove force-command in sshv" },
   "extension"        :  { "permit-pty":"", "permit-port-forwarding": "" },
   "cert_type"        :  "user"
 }
@@ -54,6 +54,5 @@ grep -q -F "${keyword_pair}" "${path}" || printf "\n%s\n%s" "${comment}" "${keyw
 if [[ "$#" -eq 0 ]]; then
   printf "\nSuccess. Try something like: ssh user1@sshserver OR sshv user1@sshserver\n\n"
 else
-  printf "\nAttempting to run this: ssh -o IdentitiesOnly=yes ${ARGS}\n\n"
   ssh -o IdentitiesOnly=yes "${ARGS}"
 fi
