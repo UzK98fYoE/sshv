@@ -51,9 +51,9 @@ path=~/.ssh/config
 grep -q -F "${keyword_pair}" "${path}" || printf "\n%s\n%s" "${comment}" "${keyword_pair}" >> "${path}"
 
 # Instructions
-if [[ "${#ARGS[@]}" -eq 1 ]]; then
-  printf "\n\nSuccess. Try something like: ssh user1@sshserver OR sshv user1@sshserver\n\n"
+if [[ "$#" -eq 1 ]]; then
+  printf "\nSuccess. Try something like: ssh user1@sshserver OR sshv user1@sshserver\n\n"
 else
-  printf "\n\nAttempting to run this: ssh ${ARGS}\n\n"
+  printf "\nAttempting to run this: ssh ${ARGS}\n\n"
   ssh "${ARGS}"
 fi
