@@ -51,9 +51,9 @@ path=~/.ssh/config
 grep -q -F "${keyword_pair}" "${path}" || printf "\n%s\n%s" "${comment}" "${keyword_pair}" >> "${path}"
 
 # Instructions
-if [[ "$#" -eq 1 ]]; then
+if [[ "$#" -eq 0 ]]; then
   printf "\nSuccess. Try something like: ssh user1@sshserver OR sshv user1@sshserver\n\n"
 else
-  printf "\nAttempting to run this: ssh ${ARGS}\n\n"
-  ssh "${ARGS}"
+  printf "\nAttempting to run this: ssh -o IdentitiesOnly=yes ${ARGS}\n\n"
+  ssh -o IdentitiesOnly=yes "${ARGS}"
 fi
