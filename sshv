@@ -4,6 +4,7 @@
 
 VAULT_ADDR="http://vault:8200"
 VAULT_TOKEN="s.ePQpZYy5DgApxWSpkoj9JLaD"
+ARGS="$@"
 
 # Prereqs
 if jq -V >/dev/null; then true; else echo "Please install jq first"; exit 1; fi
@@ -15,7 +16,7 @@ path=~/.bashrc
 grep -q -F "${command}" "${path}" || { printf "\n%s\n%s" "${comment}" "${command}" >> "${path}"; echo "ssh installed. To use it, open a new bash login shell or, to use it immediately, type this now: source ~/.bashrc"; }
 
 # Troubleshooting: Check your current login token
-curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request GET $VAULT_ADDR/v1/auth/token/lookup
+# curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request GET $VAULT_ADDR/v1/auth/token/lookup
 
 # Create a temporary, i.e., worthless after its certificate expires, ssh keypair for this user
 # Note that "echo yes | ... " overwrites any existing output file
@@ -51,3 +52,4 @@ grep -q -F "${keyword_pair}" "${path}" || printf "\n%s\n%s" "${comment}" "${keyw
 
 # Instructions
 echo "Success. Try something like: ssh user1@sshserver"
+ssh "${ARGS}"
