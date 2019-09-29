@@ -52,7 +52,8 @@ grep -q -F "${keyword_pair}" "${path}" || printf "\n%s\n%s" "${comment}" "${keyw
 
 # Instructions
 if [[ "${#ARGS[@]}" -eq 1 ]]; then
-  echo "Success. Try something like: ssh user1@sshserver OR sshv user1@sshserver"
+  printf "\nSuccess. Try something like: ssh user1@sshserver OR sshv user1@sshserver\n"
 else
-  ssh "${ARGS}"echo "Success. Try something like: ssh user1@sshserver"
+  printf "\n Attempting to run this: ssh ${ARGS}\n"
+  ssh "${ARGS}"
 fi
