@@ -23,7 +23,7 @@ grep -q -F "${command}" "${path}" || { printf "\n%s\n%s" "${comment}" "${command
 # vault can't handle ed25519 currently because it expects openssl PEM, not openssh format
 # details: https://github.com/ssh-vault/ssh-vault/issues/37
 # echo yes | ssh-keygen -N '' -t ed25519 -a 100 -f ~/.ssh/id_ed25519_vault.pub
-echo yes | ssh-keygen -N '' -t rsa -b 4096 -a 100 -f ~/.ssh/id_rsa_vault
+echo yes | ssh-keygen -N '' -t rsa -b 4096 -a 100 -f ~/.ssh/id_rsa_vault >/dev/null
 
 # Set parameters
 tee foo.json >/dev/null <<EOF
@@ -51,5 +51,8 @@ path=~/.ssh/config
 grep -q -F "${keyword_pair}" "${path}" || printf "\n%s\n%s" "${comment}" "${keyword_pair}" >> "${path}"
 
 # Instructions
-echo "Success. Try something like: ssh user1@sshserver"
-ssh "${ARGS}"
+if [[ "${#ARGS[@]}" -eq 1 ]]; then
+  echo "Success. Try something like: ssh user1@sshserver OR sshv user1@sshserver"
+else
+  ssh "${ARGS}"echo "Success. Try something like: ssh user1@sshserver"
+fi
