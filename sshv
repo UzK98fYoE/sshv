@@ -7,13 +7,19 @@ VAULT_TOKEN="s.ePQpZYy5DgApxWSpkoj9JLaD"
 ARGS="$*"
 
 # Prereqs
-if jq -V >/dev/null; then true; else echo "Please install jq first"; exit 1; fi
+if jq -V >/dev/null; then true; else
+  echo "Please install jq first"
+  exit 1
+fi
 
 # Make "sshv" run the script
 comment="# Added by configuration-manager@foo.com"
 command="alias sshv='bash <(curl -sSL http://ibm.biz/wfss-swinger-sshv)'"
 path=~/.bashrc
-grep -q -F "${command}" "${path}" || { printf "\n%s\n%s" "${comment}" "${command}" >> "${path}"; echo "ssh installed. To use it, open a new bash login shell or, to use it immediately, type this now: source ~/.bashrc"; }
+grep -q -F "${command}" "${path}" || {
+  printf "\n%s\n%s" "${comment}" "${command}" >>"${path}"
+  echo "ssh installed. To use it, open a new bash login shell or, to use it immediately, type this now: source ~/.bashrc"
+}
 
 # Troubleshooting: Check your current login token
 # curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request GET $VAULT_ADDR/v1/auth/token/lookup
@@ -25,7 +31,7 @@ echo yes | ssh-keygen -N '' -t rsa -b 4096 -a 100 -f ~/.ssh/id_rsa_vault >/dev/n
 # Set parameters
 tee foo.json >/dev/null <<EOF
 {
-  "public_key"       :  "$(tr '\n' '*' < ~/.ssh/id_rsa_vault.pub | sed 's/\*/\\n/g')",
+  "public_key"       :  "$(tr '\n' '*' <~/.ssh/id_rsa_vault.pub | sed 's/\*/\\n/g')",
   "ttl"              :  "7s",
   "valid_principals" :  "user1",
   "cert_type"        :  "user",
@@ -38,14 +44,14 @@ EOF
 
 # Sign
 curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request POST \
-     --data @foo.json $VAULT_ADDR/v1/users-ca/sign/role1 |\
-     jq -r ".data.signed_key" > ~/.ssh/id_rsa_vault-cert.pub
+  --data @foo.json $VAULT_ADDR/v1/users-ca/sign/role1 |
+  jq -r ".data.signed_key" >~/.ssh/id_rsa_vault-cert.pub
 
 # Automatically try using that cert on new connections
 comment="# Added by configuration-manager@foo.com"
 keyword_pair='IdentityFile ~/.ssh/id_rsa_vault'
 path=~/.ssh/config
-grep -q -F "${keyword_pair}" "${path}" || printf "\n%s\n%s" "${comment}" "${keyword_pair}" >> "${path}"
+grep -q -F "${keyword_pair}" "${path}" || printf "\n%s\n%s" "${comment}" "${keyword_pair}" >>"${path}"
 
 # Instructions
 if [[ "$#" -eq 0 ]]; then
