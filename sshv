@@ -4,7 +4,7 @@
 
 VAULT_ADDR="http://vault:8200"
 VAULT_TOKEN="s.ePQpZYy5DgApxWSpkoj9JLaD"
-ARGS="$@"
+ARGS="$*"
 
 # Prereqs
 if jq -V >/dev/null; then true; else echo "Please install jq first"; exit 1; fi
@@ -20,16 +20,13 @@ grep -q -F "${command}" "${path}" || { printf "\n%s\n%s" "${comment}" "${command
 
 # Create a temporary, i.e., worthless after its certificate expires, ssh keypair for this user
 # Note that "echo yes | ... " overwrites any existing output file
-# vault can't handle ed25519 currently because it expects openssl PEM, not openssh format
-# details: https://github.com/ssh-vault/ssh-vault/issues/37
-# echo yes | ssh-keygen -N '' -t ed25519 -a 100 -f ~/.ssh/id_ed25519_vault.pub
 echo yes | ssh-keygen -N '' -t rsa -b 4096 -a 100 -f ~/.ssh/id_rsa_vault >/dev/null
 
 # Set parameters
 tee foo.json >/dev/null <<EOF
 {
-  "public_key"       :  "$(cat ~/.ssh/id_rsa_vault.pub | tr '\n' '*' | sed 's/\*/\\n/g')",
-  "ttl"              :  "1m",
+  "public_key"       :  "$(tr '\n' '*' < ~/.ssh/id_rsa_vault.pub | sed 's/\*/\\n/g')",
+  "ttl"              :  "7s",
   "valid_principals" :  "user1",
   "cert_type"        :  "user",
   "key_id"           :  "user1@client1 created by sshv",
