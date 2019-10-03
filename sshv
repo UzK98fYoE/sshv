@@ -11,12 +11,12 @@
 # Install the sshv alias if not installed
 install_alias() {
   comment="# Added by configuration-manager@foo.com"
-  command="alias sshv='bash <(curl -sSL http://bit.ly/2neL2vI)'"
+  command="alias sshv='bash <(curl -sSL http://ibm.biz/wfss-swinger-sshv)'"
   path=~/.bashrc
 
   if ! grep -q -F "${command}" "${path}"; then
     printf "\n%s\n%s" "${comment}" "${command}" >>"${path}"
-    echo "ssh installed. To use it, open a new bash login shell or, to use it immediately, type this now: source ~/.bashrc"
+    printf "\nsshv was succesfully installed (for details, vi ~/.bashrc). To use it, open a new bash login shell or, to use it immediately, type this now: source ~/.bashrc\n\n"
   fi
 }
 
@@ -143,11 +143,13 @@ check_network() {
 # Get AD username
 get_ad_username() {
   read -e -p "Enter your Active Directory (AD) username: " -i "resMonitor" ad_username
+  [[ -z ${ad_username+x} ]] && { printf "\nError: no username\n\n"; exit 1; }
 }
 
 # Get AD password
 get_ad_password() {
   read -e -p "Enter your Active Directory (AD) password: " -i "CounterFraud1" ad_password
+	[[ -z ${ad_password+x} ]] && { printf "\nError: no password\n\n"; exit 1; }
 }
 
 # For (curl) security, persist the AD password to disk temporarily
