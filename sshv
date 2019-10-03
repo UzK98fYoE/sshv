@@ -1,61 +1,269 @@
 #!/bin/bash
-# Public URL: http://ibm.biz/wfss-swinger-sshv
-# Usage: bash <(curl -sSL http://ibm.biz/wfss-swinger-sshv)
-
-VAULT_ADDR="http://vault:8200"
-VAULT_TOKEN="s.ePQpZYy5DgApxWSpkoj9JLaD"
-ARGS="$*"
-
-# Prereqs
-if jq -V >/dev/null; then true; else
-  echo "Please install jq first"
-  exit 1
-fi
-
-# Make "sshv" run the script
-comment="# Added by configuration-manager@foo.com"
-command="alias sshv='bash <(curl -sSL http://ibm.biz/wfss-swinger-sshv)'"
-path=~/.bashrc
-grep -q -F "${command}" "${path}" || {
-  printf "\n%s\n%s" "${comment}" "${command}" >>"${path}"
-  echo "ssh installed. To use it, open a new bash login shell or, to use it immediately, type this now: source ~/.bashrc"
-}
+#
+# ssh to hosts via certificates using hashicorp vault as the Certificate Authority (CA)
+#
+# Public URL: http://bit.ly/2neL2vI
+# Usage: bash <(curl -sSL http://bit.ly/2neL2vI)
 
 # Troubleshooting: Check your current login token
 # curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request GET $VAULT_ADDR/v1/auth/token/lookup
 
+# Install the sshv alias if not installed
+install_alias() {
+  comment="# Added by configuration-manager@foo.com"
+  command="alias sshv='bash <(curl -sSL http://bit.ly/2neL2vI)'"
+  path=~/.bashrc
+
+  if ! grep -q -F "${command}" "${path}"; then
+    printf "\n%s\n%s" "${comment}" "${command}" >>"${path}"
+    echo "ssh installed. To use it, open a new bash login shell or, to use it immediately, type this now: source ~/.bashrc"
+  fi
+}
+
+# display help text
+display_help() {
+cat <<EOF
+
+Welcome to sshv
+
+  Purpose: A vault-aware ssh client
+
+    Usage: sshv [OPTIONS] destination [COMMAND]
+
+  Example: sshv user1@sshserver
+  Example: sshv user1@sshserver echo "hello world"
+
+Options:
+  -h, --help   Display help
+
+EOF
+exit
+}
+
+# get options: https://gist.github.com/cosimo/3760587
+get_options() {
+  OPTS=$(getopt -o h --long help -n 'parse-options' -- "$@")
+  if [ $? != 0 ] ; then display_help ; exit 1 ; fi
+  eval set -- "$OPTS"
+
+  while true; do
+    case "$1" in
+             -h|--help)  display_help ; shift ;;
+                    --)  shift ; break ;;
+                     *)  echo "Internal error!" ; display_help; exit 1 ;;
+		esac
+	done
+}
+
+# Handle command line arguments / options / positional parameters
+setup() {
+  get_options "$@"
+  MAC_GNU_GETOPT_PATH="/usr/local/opt/gnu-getopt/bin/getopt"
+  VAULT_HOSTNAME="vault"
+  VAULT_PORT="8200"
+  URI_SCHEME="http" # http for development. https for production.
+}
+
+# Which OS are you running?
+get_os() {
+  unameOut="$(uname -s)"
+  case "${unameOut}" in
+      Linux*)     os="Linux";;
+      Darwin*)    os="Mac";;
+      CYGWIN*)    os="Cygwin";;
+      MINGW*)     os="MinGw";;
+      *)          os="UNKNOWN:${unameOut}"
+    esac
+}
+
+# Require this
+req_jq() {
+  if ! type jq &>/dev/null; then
+    printf "Please install jq first\n\n"
+    exit 1
+  fi
+}
+
+# Require this
+req_ssh() {
+  if ! type ssh &>/dev/null; then
+    printf "Please install ssh first\n\n"
+    exit 1
+  fi
+}
+
+# If running MacOS, require coreutils is installed (use greadlink as a proxy)
+req_coreutils() {
+  if ! type greadlink &>/dev/null; then
+    printf "Please install coreutils first: brew install coreutils\n\n"
+    exit 1
+  fi
+}
+
+# Linux usually has getopt (which allows long options) but MacOS, which is
+# based on FreeBSD, needs the gnu version: brew install gnu-getopt
+# https://stackoverflow.com/a/402410/1231693
+req_getopt() {
+  # if getopt not already installed
+  if [[ ! -f "${MAC_GNU_GETOPT_PATH}" ]]; then
+    printf "Please install getopt first: brew install gnu-getopt\n\n"
+    exit 1
+  fi
+
+  # override getopt shell built-in with gnu version but only for this script:
+  # https://stackoverflow.com/a/47542834/1231693
+  if [[ -z ${FLAGS_GETOPT_CMD+x} ]]; then
+    export PATH="/usr/local/opt/gnu-getopt/bin:$PATH"
+    export FLAGS_GETOPT_CMD="${MAC_GNU_GETOPT_PATH}"
+  fi
+}
+
+# Check prereqs
+check_prereqs() {
+  # all OS's require these
+  req_ssh
+  req_jq
+
+  case "${os}" in
+      Mac*)     req_coreutils; req_getopt;;
+    Linux*)                              ;;
+         *)                              ;;
+  esac
+}
+
+# Check network connectivity
+check_network() {
+  # On Mac, timeout is part of coreutils (then gtimeout and timeout have same sha1sum)
+  if ! timeout 3 bash -c "cat < /dev/null > /dev/tcp/${VAULT_HOSTNAME}/${VAULT_PORT}"; then
+      printf "\nError: I couldn't contact the hostname \"${VAULT_HOSTNAME}\" on port ${VAULT_PORT}. Check your networking, host name, and port.\n\n";
+			exit 1
+		fi
+}
+
+# Get AD username
+get_ad_username() {
+  read -e -p "Enter your Active Directory (AD) username: " -i "resMonitor" ad_username
+}
+
+# Get AD password
+get_ad_password() {
+  read -e -p "Enter your Active Directory (AD) password: " -i "CounterFraud1" ad_password
+}
+
+# For (curl) security, persist the AD password to disk temporarily
+# For secure curl login (i.e., don't show passwords in bash history or ps listing). Details: https://unix.stackexchange.com/a/385349/171736
+persist_ad_password() {
+  creds_filepath="$(mktemp)"
+  chmod 0700 "${creds_filepath}" # only allow the owner to see this for the split second it exists
+  tee "${creds_filepath}" <<< "{\"password\": \"${ad_password}\"}"
+}
+
+get_creds() {
+  get_ad_username
+  get_ad_password
+  persist_ad_password
+}
+
+# Send credentials to vault
+send_creds() {
+  # try to log in
+	token="$(curl -sS --request POST --data @\"${creds_filepath}\" $VAULT_ADDR/v1/auth/ldap/login/resMonitor | jq -r '.auth.client_token')"
+
+  # error handling
+  if [[ -z ${token+x} ]]; then { echo "Error obtaining a vault token."; exit 1; }; fi
+}
+
+# Delete the stored credentials
+delete_creds() {
+  if ! shred "${creds_filepath}"; then
+    rm -f "${creds_filepath}"
+	fi
+  unset creds_filepath
+  unset ad_password
+}
+
+# Log in to Active Directory
+try_ldap() {
+  get_creds
+	send_creds
+  delete_creds
+}
+
+# Set up required vault environment variables
+set_vault_env() {
+  VAULT_ADDR="${URI_SCHEME}://${VAULT_HOSTNAME}:${VAULT_PORT}"
+  VAULT_TOKEN="${token}"
+}
+
+# Log into vault
+authenticate_to_vault() {
+  try_ldap
+  set_vault_env
+}
+
+# Create rsa keypair. ed25519 not supported yet in vault
 # Create a temporary, i.e., worthless after its certificate expires, ssh keypair for this user
-# Note that "echo yes | ... " overwrites any existing output file
-echo yes | ssh-keygen -N '' -t rsa -b 4096 -a 100 -f ~/.ssh/id_rsa_vault >/dev/null
+create_keypair() {
+  # Note that "echo yes | ... " overwrites any existing output file
+  echo printf | ssh-keygen -N '' -t rsa -b 4096 -a 100 -f ~/.ssh/id_rsa_vault >/dev/null
+}
 
 # Set parameters
-tee foo.json >/dev/null <<EOF
-{
-  "public_key"       :  "$(tr '\n' '*' <~/.ssh/id_rsa_vault.pub | sed 's/\*/\\n/g')",
-  "ttl"              :  "7s",
-  "valid_principals" :  "user1",
-  "cert_type"        :  "user",
-  "key_id"           :  "user1@client1 created by sshv",
-  "critical_options" :  { "force-command": "echo This is a single-purpose key. To change that, remove force-command in sshv" },
-  "extension"        :  { "permit-pty":"", "permit-port-forwarding": "" },
-  "cert_type"        :  "user"
-}
+set_signee_parms() {
+tee foo.json >/dev/null <<-EOF
+	{
+	"public_key"       :  "$(tr '\n' '*' <~/.ssh/id_rsa_vault.pub | sed 's/\*/\\n/g')",
+	"ttl"              :  "7s",
+	"valid_principals" :  "user1",
+	"cert_type"        :  "user",
+	"key_id"           :  "user1@client1 created by sshv",
+	"critical_options" :  { "force-command": "echo This is a single-purpose key. To change that, remove force-command in sshv" },
+	"extension"        :  { "permit-pty":"", "permit-port-forwarding": "" },
+	"cert_type"        :  "user"
+	}
 EOF
+}
 
-# Sign
+# Get signature from Vault (CA)
+get_signature() {
 curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request POST \
-  --data @foo.json $VAULT_ADDR/v1/users-ca/sign/role1 |
+  --data @foo.json "${VAULT_ADDR}/v1/users-ca/sign/role1" |
   jq -r ".data.signed_key" >~/.ssh/id_rsa_vault-cert.pub
+}
 
-# Automatically try using that cert on new connections
-comment="# Added by configuration-manager@foo.com"
-keyword_pair='IdentityFile ~/.ssh/id_rsa_vault'
-path=~/.ssh/config
-grep -q -F "${keyword_pair}" "${path}" || printf "\n%s\n%s" "${comment}" "${keyword_pair}" >>"${path}"
+# Update ssh_config if not updated so that ssh will Automatically try using that cert on new connections
+add_identityfile() {
+  comment="# Added by configuration-manager@foo.com"
+  keyword_pair='IdentityFile ~/.ssh/id_rsa_vault'
+  path=~/.ssh/config
+  grep -q -F "${keyword_pair}" "${path}" || printf "\n%s\n%s" "${comment}" "${keyword_pair}" >>"${path}"
+}
 
-# Instructions
-if [[ "$#" -eq 0 ]]; then
-  printf "\nSuccess. Try something like: ssh user1@sshserver OR sshv user1@sshserver\n\n"
-else
-  ssh -o IdentitiesOnly=yes "${ARGS}"
+# Print instructions
+print_instructions() {
+  if [[ "$#" -eq 0 ]]; then
+    printf "\nSuccess. Try something like: ssh user1@sshserver OR sshv user1@sshserver\n\n"
+  else
+    ssh -o IdentitiesOnly=yes "${OPTS}"
+  fi
+}
+
+# run
+main() {
+  install_alias
+  setup "$@"
+  get_os
+  check_prereqs
+  check_network
+  authenticate_to_vault
+  create_keypair
+  set_signee_parms
+  get_signature
+  add_identityfile
+  print_instructions
+}
+
+# Start here and pass any parameters
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  main "$@"
 fi
