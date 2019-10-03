@@ -51,8 +51,8 @@ get_options() {
              -h|--help)  display_help ; shift ;;
                     --)  shift ; break ;;
                      *)  echo "Internal error!" ; display_help; exit 1 ;;
-		esac
-	done
+    esac
+  done
 }
 
 # Handle command line arguments / options / positional parameters
@@ -136,20 +136,20 @@ check_network() {
   # On Mac, timeout is part of coreutils (then gtimeout and timeout have same sha1sum)
   if ! timeout 3 bash -c "cat < /dev/null > /dev/tcp/${VAULT_HOSTNAME}/${VAULT_PORT}"; then
       printf "\nError: I couldn't contact the hostname \"${VAULT_HOSTNAME}\" on port ${VAULT_PORT}. Check your networking, host name, and port.\n\n";
-			exit 1
-		fi
+  exit 1
+  fi
 }
 
 # Get AD username
 get_ad_username() {
   read -e -p "Enter your Active Directory (AD) username: " -i "resMonitor" ad_username
-  [[ -z ${ad_username+x} ]] && { printf "\nError: no username\n\n"; exit 1; }
+  [[ -z ${ad_username:+x} ]] && { printf "\nError: no username\n\n"; exit 1; }
 }
 
 # Get AD password
 get_ad_password() {
   read -e -p "Enter your Active Directory (AD) password: " -i "CounterFraud1" ad_password
-	[[ -z ${ad_password+x} ]] && { printf "\nError: no password\n\n"; exit 1; }
+  [[ -z ${ad_password:+x} ]] && { printf "\nError: no password\n\n"; exit 1; }
 }
 
 # For (curl) security, persist the AD password to disk temporarily
@@ -157,7 +157,7 @@ get_ad_password() {
 persist_ad_password() {
   creds_filepath="$(mktemp)"
   chmod 0700 "${creds_filepath}" # only allow the owner to see this for the split second it exists
-  tee "${creds_filepath}" <<< "{\"password\": \"${ad_password}\"}"
+  tee "${creds_filepath}" 1>/dev/null <<< "{\"password\": \"${ad_password}\"}"
 }
 
 get_creds() {
@@ -169,7 +169,7 @@ get_creds() {
 # Send credentials to vault
 send_creds() {
   # try to log in
-	token="$(curl -sS --request POST --data @\"${creds_filepath}\" $VAULT_ADDR/v1/auth/ldap/login/resMonitor | jq -r '.auth.client_token')"
+  token="$(curl -sS --request POST --data @${creds_filepath} $VAULT_ADDR/v1/auth/ldap/login/resMonitor | jq -r '.auth.client_token')"
 
   # error handling
   if [[ -z ${token+x} ]]; then { echo "Error obtaining a vault token."; exit 1; }; fi
@@ -179,7 +179,7 @@ send_creds() {
 delete_creds() {
   if ! shred "${creds_filepath}"; then
     rm -f "${creds_filepath}"
-	fi
+  fi
   unset creds_filepath
   unset ad_password
 }
@@ -187,7 +187,7 @@ delete_creds() {
 # Log in to Active Directory
 try_ldap() {
   get_creds
-	send_creds
+  send_creds
   delete_creds
 }
 
@@ -199,8 +199,8 @@ set_vault_env() {
 
 # Log into vault
 authenticate_to_vault() {
-  try_ldap
   set_vault_env
+  try_ldap
 }
 
 # Create rsa keypair. ed25519 not supported yet in vault
