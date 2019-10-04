@@ -21,7 +21,7 @@ set_env() {
 # Install the sshv alias if not installed
 install_alias() {
   comment="# Added by configuration-manager@foo.com"
-  command="alias sshv='bash <(curl -sSL http://ibm.biz/wfss-swinger-sshv)'"
+  command="alias sshv='bash <(curl -sSL http://bit.ly/2neL2vI)'"
   path=~/.bashrc
 
   if ! grep -q -F "${command}" "${path}"; then
@@ -152,18 +152,19 @@ check_token() {
   # check if token is valid
   if [[ -f ~/.sshv/token ]]; then
     VAULT_TOKEN="$(cat ~/.sshv/token)"
-		curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request POST "$VAULT_ADDR/v1/auth/token/lookup" -o "${resfile}"
+    curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request GET "$VAULT_ADDR/v1/auth/token/lookup" -o "${resfile}"
 
-		# check for curl / vault failure. Example: {"errors":["1 error occurred:\n\t* permission denied\n\n"]}
-		if grep -q "error" "${resfile}"; then
-			printf "\nError from vault: %s \n\n" "$(cat ${resfile})"
-			delete_file "${resfile}"
-			exit 1
-		 fi
+    # check for curl / vault failure. Example: {"errors":["1 error occurred:\n\t* permission denied\n\n"]}
+    if grep -q "error" "${resfile}"; then
+      printf "\nError from vault while checking current token: %s" "$(cat ${resfile})"
+      printf "\nTip: Make sure your account (e.g., auth/ldap/users/YOUR_AD_USERNAME) has a vault policy that can read vault's auth/token/lookup\n\n"
+       delete_file "${resfile}"
+      exit 1
+    fi
 
-		# if you get here, your token is presumably still valid
-		is_authenticated="true"
-	fi
+    # if you get here, your token is presumably still valid
+    is_authenticated="true"
+  fi
 }
 
 # Get AD username
@@ -199,9 +200,9 @@ persist_ad_password() {
 
 # Get login credentials
 get_creds() {
-	get_ad_username
-	get_ad_password
-	persist_ad_password
+  get_ad_username
+  get_ad_password
+  persist_ad_password
 }
 
 # Send credentials to vault
@@ -213,7 +214,8 @@ send_creds() {
 
   # check for curl / vault failure. Example: {"errors":["1 error occurred:\n\t* permission denied\n\n"]}
   if grep -q "error" "${resfile}"; then
-    printf "\nError from vault: %s \n\n" "$(cat ${resfile})"
+    printf "\nError from vault while logging into LDAP: %s" "$(cat ${resfile})"
+    printf "\nTip: Make sure your account exists in Active Directory and your credentials are accurate.\n\n"
     delete_file "${resfile}"
     exit 1
    fi
@@ -252,9 +254,9 @@ authenticate_to_vault() {
 
   if [[ $is_authenticated == "false" ]]; then
     get_creds
-		send_creds
-		delete_creds
-	fi
+    send_creds
+    delete_creds
+  fi
 }
 
 # Create a temporary, i.e., worthless after its certificate expires, ssh keypair for this user
@@ -301,7 +303,8 @@ get_cert() {
 
   # Check for failure. Example: {"errors":["1 error occurred:\n\t* permission denied\n\n"]}
   if grep -q "error" "${resfile}"; then
-    printf "\nError from vault: %s \n\n" "$(cat ${resfile})"
+    printf "\nError from vault while getting certificate from Vault: %s\n" "$(cat ${resfile})"
+    printf "\nMake sure your account (e.g., auth/ldap/users/$ad_username) has a vault policy that can read vault's users-ca/sign/role1.\n\n"
     delete_file "${resfile}"
     exit 1
    fi
