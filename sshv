@@ -26,7 +26,7 @@ install_alias() {
 
   if ! grep -q -F "${command}" "${path}"; then
     printf "\n%s\n%s" "${comment}" "${command}" >>"${path}"
-    printf "\nsshv was succesfully installed (for details, vi ~/.bashrc). To use it, open a new bash login shell or, to use it immediately, type this now: source ~/.bashrc\n\n"
+    printf "\nsshv was succesfully installed (for details, vi ~/.bashrc). To use it, open a new bash login shell or, to use it immediately, type this now: source ~/.bashrc\n"
   fi
 }
 
@@ -79,7 +79,7 @@ get_os() {
 # Require this
 req_jq() {
   if ! type jq &>/dev/null; then
-    printf "Please install jq first\n\n"
+    printf "Please install jq first\n"
     exit 1
   fi
 }
@@ -87,7 +87,7 @@ req_jq() {
 # Require this
 req_ssh() {
   if ! type ssh &>/dev/null; then
-    printf "Please install ssh first\n\n"
+    printf "Please install ssh first\n"
     exit 1
   fi
 }
@@ -95,7 +95,7 @@ req_ssh() {
 # If running MacOS, require coreutils is installed (use greadlink as a proxy)
 req_coreutils() {
   if ! type greadlink &>/dev/null; then
-    printf "Please install coreutils first: brew install coreutils\n\n"
+    printf "Please install coreutils first: brew install coreutils\n"
     exit 1
   fi
 }
@@ -106,7 +106,7 @@ req_coreutils() {
 req_getopt() {
   # if getopt not already installed
   if [[ ! -f "${MAC_GNU_GETOPT_PATH}" ]]; then
-    printf "Please install getopt first: brew install gnu-getopt\n\n"
+    printf "Please install getopt first: brew install gnu-getopt\n"
     exit 1
   fi
 
@@ -135,7 +135,7 @@ check_prereqs() {
 check_network() {
   # On Mac, timeout is part of coreutils (then gtimeout and timeout have same sha1sum)
   if ! timeout 3 bash -c "cat < /dev/null > /dev/tcp/${VAULT_HOSTNAME}/${VAULT_PORT}"; then
-      printf "\nError: I couldn't contact the hostname %s on port %s. Check your networking, host name, and port.\n\n." "${VAULT_HOSTNAME}" "${VAULT_PORT}"
+      printf "\nError: I couldn't contact the hostname %s on port %s. Check your networking, host name, and port.\n." "${VAULT_HOSTNAME}" "${VAULT_PORT}"
   exit 1
   fi
 }
@@ -154,10 +154,10 @@ check_token() {
     VAULT_TOKEN="$(cat ~/.sshv/token)"
     curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request GET "$VAULT_ADDR/v1/auth/token/lookup" -o "${resfile}"
 
-    # check for curl / vault failure. Example: {"errors":["1 error occurred:\n\t* permission denied\n\n"]}
+    # check for curl / vault failure. Example: {"errors":["1 error occurred:\n\t* permission denied\n"]}
     if grep -q "error" "${resfile}"; then
       printf "\nError from vault while checking current token: %s" "$(cat ${resfile})"
-      printf "\nTip: Make sure your account (e.g., auth/ldap/users/YOUR_AD_USERNAME) has a vault policy that can read vault's auth/token/lookup\n\n"
+      printf "\nTip: Make sure your account (e.g., auth/ldap/users/YOUR_AD_USERNAME) has a vault policy that can read vault's auth/token/lookup\n"
        delete_file "${resfile}"
       exit 1
     fi
@@ -176,7 +176,7 @@ get_ad_username() {
   [[ -f "${userfile}" ]] && ad_username=$(cat "${userfile}")
 
   read -er -p "Enter your Active Directory (AD) username: " -i "${ad_username}" ad_username
-  [[ -z ${ad_username:+x} ]] && { printf "\nError: no username\n\n"; exit 1; }
+  [[ -z ${ad_username:+x} ]] && { printf "\nError: no username\n"; exit 1; }
 
   # persist username
   tee "${userfile}" 1>/dev/null <<< "${ad_username}"
@@ -185,8 +185,7 @@ get_ad_username() {
 # Get AD password
 get_ad_password() {
   read -er -p "Enter your Active Directory (AD) password: " -i "CounterFraud1" "ad_password"
-  [[ -z ${ad_password:+x} ]] && { printf "\nError: no password\n\n"; exit 1; }
-  echo # breathing room before next output
+  [[ -z ${ad_password:+x} ]] && { printf "\nError: no password\n"; exit 1; }
 }
 
 # For (curl) security, persist the AD password to disk temporarily
@@ -212,10 +211,10 @@ send_creds() {
   # try to log in
   curl -sS --request POST --data @"${creds_filepath}" "$VAULT_ADDR/v1/auth/ldap/login/$ad_username" -o "${resfile}"
 
-  # check for curl / vault failure. Example: {"errors":["1 error occurred:\n\t* permission denied\n\n"]}
+  # check for curl / vault failure. Example: {"errors":["1 error occurred:\n\t* permission denied\n"]}
   if grep -q "error" "${resfile}"; then
     printf "\nError from vault while logging into LDAP: %s" "$(cat ${resfile})"
-    printf "\nTip: Make sure your account exists in Active Directory and your credentials are accurate.\n\n"
+    printf "\nTip: Make sure your account exists in Active Directory and your credentials are accurate.\n"
     delete_file "${resfile}"
     exit 1
    fi
@@ -301,10 +300,10 @@ get_cert() {
   curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request POST \
   --data @csr.json "${VAULT_ADDR}/v1/users-ca/sign/role1" -o "${resfile}"
 
-  # Check for failure. Example: {"errors":["1 error occurred:\n\t* permission denied\n\n"]}
+  # Check for failure. Example: {"errors":["1 error occurred:\n\t* permission denied\n"]}
   if grep -q "error" "${resfile}"; then
     printf "\nError from vault while getting certificate from Vault: %s\n" "$(cat ${resfile})"
-    printf "\nMake sure your account (e.g., auth/ldap/users/$ad_username) has a vault policy that can read vault's users-ca/sign/role1.\n\n"
+    printf "\nMake sure your account (e.g., auth/ldap/users/$ad_username) has a vault policy that can read vault's users-ca/sign/role1.\n"
     delete_file "${resfile}"
     exit 1
    fi
@@ -325,7 +324,7 @@ add_identityfile() {
 # Run ssh command or give instructions to do that
 run_ssh() {
   if [[ -z "${args[*]+x}" ]]; then
-    printf "\nSuccess. Try something like: ssh user1@sshserver OR sshv user1@sshserver\n\n"
+    printf "Success. Try something like: ssh user1@sshserver OR sshv user1@sshserver\n"
   else
     ssh -o IdentitiesOnly=yes "${args[@]}"
   fi
