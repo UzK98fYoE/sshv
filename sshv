@@ -49,7 +49,7 @@ get_options() {
   while true; do
     case "$1" in
              -h|--help)  display_help ; shift ;;
-                    --)  shift ; break ;;
+             --)  shift ; cmd=(); until [[ -z ${1+x} ]]; do cmd=("$1"); shift; done; break ;;
                      *)  echo "Internal error!" ; display_help; exit 1 ;;
     esac
   done
@@ -62,6 +62,7 @@ setup() {
   VAULT_HOSTNAME="vault"
   VAULT_PORT="8200"
   URI_SCHEME="http" # http for development. https for production.
+  VAULT_ADDR="${URI_SCHEME}://${VAULT_HOSTNAME}:${VAULT_PORT}"
 }
 
 # Which OS are you running?
@@ -193,14 +194,13 @@ try_ldap() {
 
 # Set up required vault environment variables
 set_vault_env() {
-  VAULT_ADDR="${URI_SCHEME}://${VAULT_HOSTNAME}:${VAULT_PORT}"
   VAULT_TOKEN="${token}"
 }
 
 # Log into vault
 authenticate_to_vault() {
-  set_vault_env
   try_ldap
+  set_vault_env
 }
 
 # Create rsa keypair. ed25519 not supported yet in vault
@@ -243,10 +243,10 @@ add_identityfile() {
 
 # Print instructions
 print_instructions() {
-  if [[ "$#" -eq 0 ]]; then
+  if [[ -z "${cmd[@]+x}" ]]; then
     printf "\nSuccess. Try something like: ssh user1@sshserver OR sshv user1@sshserver\n\n"
   else
-    ssh -o IdentitiesOnly=yes "${OPTS}"
+    ssh -o IdentitiesOnly=yes "${cmd[@]}"
   fi
 }
 
