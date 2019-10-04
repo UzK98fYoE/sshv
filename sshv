@@ -58,7 +58,7 @@ get_options() {
   while true; do
     case "$1" in
              -h|--help)  display_help ; shift ;;
-             --)  shift ; args=(); until [[ -z ${1+x} ]]; do args=("$1"); shift; done; break ;;
+             --)  shift ; args=(); until [[ -z ${1+x} ]]; do args+=("$1"); shift; done; break ;;
                      *)  echo "Internal error!" ; display_help; exit 1 ;;
     esac
   done
@@ -324,9 +324,9 @@ add_identityfile() {
 # Run ssh command or give instructions to do that
 run_ssh() {
   if [[ -z "${args[*]+x}" ]]; then
-    printf "Success. Try something like: ssh user1@sshserver OR sshv user1@sshserver\n"
+    printf "Success. Try something like: sshv user1@sshserver OR sshv user1@sshserver echo hello-world\n"
   else
-    ssh -o IdentitiesOnly=yes "${args[@]}"
+    ssh -o IdentitiesOnly=yes ${args[*]}
   fi
 }
 
