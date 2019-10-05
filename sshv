@@ -158,7 +158,7 @@ check_token() {
     if grep -q "error" "${resfile}"; then
       printf "Error from vault while checking current token: %s. Possible reasons:\n" "$(cat ${resfile})"
       printf "  1. Your vault policy does not have read access to auth/token/lookup.\n"
-      printf "  2. Your vault token may have expired.\n\n"
+      printf "  2. Your vault token expired and must re-authenticate.\n\n"
       delete_file "${resfile}"
     else # if you get here, your token is presumably still valid
       is_authenticated="true"
@@ -183,9 +183,9 @@ get_ad_username() {
 
 # Get AD password
 get_ad_password() {
-  read -er -p "Enter your Active Directory (AD) password: " -i "CounterFraud1" "ad_password"
+  read -er -s -p "Enter your Active Directory (AD) password: " ad_password
   [[ -z ${ad_password:+x} ]] && { printf "\nError: no password\n"; exit 1; }
-  echo # breathing room
+  printf "\n\n" # breathing room
 }
 
 # For (curl) security, persist the AD password to disk temporarily
@@ -213,8 +213,9 @@ send_creds() {
 
   # check for curl / vault failure. Example: {"errors":["1 error occurred:\n\t* permission denied\n"]}
   if grep -q "error" "${resfile}"; then
-    printf "\nError from vault while logging into LDAP: %s" "$(cat ${resfile})"
-    printf "\nTip: Make sure your account exists in Active Directory and your credentials are accurate.\n"
+    printf "Error from vault while logging into LDAP: %s. Possible reasons:\n" "$(cat ${resfile})"
+    printf "  1. $ad_username does not exist in Active Directory.\n" "${ad_username}"
+    printf "  2. Your username or password are incorrect.\n"
     delete_file "${resfile}"
     exit 1
    fi
@@ -302,8 +303,9 @@ get_cert() {
 
   # Check for failure. Example: {"errors":["1 error occurred:\n\t* permission denied\n"]}
   if grep -q "error" "${resfile}"; then
-    printf "\nError from vault while getting certificate from Vault: %s\n" "$(cat ${resfile})"
-    printf "\nMake sure your account (e.g., auth/ldap/users/$ad_username) has a vault policy that can read vault's users-ca/sign/role1.\n"
+    printf "\nError from while getting certificate from vault: %s. Possible reasons:\n" "$(cat ${resfile})"
+    printf "  1. In vault, auth/ldap/users/%s does not have a vault policy. \n" "${ad_username}"
+    printf "  2. In vault, auth/ldap/users/%s can not read users-ca/sign/role1.\n" "${ad_username}"
     delete_file "${resfile}"
     exit 1
    fi
