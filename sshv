@@ -156,14 +156,13 @@ check_token() {
 
     # check for curl / vault failure. Example: {"errors":["1 error occurred:\n\t* permission denied\n"]}
     if grep -q "error" "${resfile}"; then
-      printf "\nError from vault while checking current token: %s" "$(cat ${resfile})"
-      printf "\nTip: Make sure your account (e.g., auth/ldap/users/YOUR_AD_USERNAME) has a vault policy that can read vault's auth/token/lookup\n"
-       delete_file "${resfile}"
-      exit 1
+      printf "Error from vault while checking current token: %s. Possible reasons:\n" "$(cat ${resfile})"
+      printf "  1. Your vault policy does not have read access to auth/token/lookup.\n"
+      printf "  2. Your vault token may have expired.\n\n"
+      delete_file "${resfile}"
+    else # if you get here, your token is presumably still valid
+      is_authenticated="true"
     fi
-
-    # if you get here, your token is presumably still valid
-    is_authenticated="true"
   fi
 }
 
@@ -186,6 +185,7 @@ get_ad_username() {
 get_ad_password() {
   read -er -p "Enter your Active Directory (AD) password: " -i "CounterFraud1" "ad_password"
   [[ -z ${ad_password:+x} ]] && { printf "\nError: no password\n"; exit 1; }
+  echo # breathing room
 }
 
 # For (curl) security, persist the AD password to disk temporarily
