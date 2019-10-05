@@ -278,7 +278,7 @@ tee csr.json >/dev/null <<-EOF
 	"valid_principals" :  "user1",
 	"cert_type"        :  "user",
 	"key_id"           :  "user1@client1 created by sshv",
-	"critical_options" :  { "force-command": "echo This is a single-purpose key. To change that, remove force-command in sshv" },
+	"critical_options" :  {},
 	"extension"        :  { "permit-pty":"", "permit-port-forwarding": "" },
 	"cert_type"        :  "user"
 	}
