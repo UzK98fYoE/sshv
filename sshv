@@ -10,11 +10,11 @@
 
 # Handle command line arguments / options / positional parameters
 set_env() {
-  VAULT_HOSTNAME="vault"
-  VAULT_PORT="8200"
-  MAC_GNU_GETOPT_PATH="/usr/local/opt/gnu-getopt/bin/getopt"
-  URI_SCHEME="http" # http for development. https for production.
-  VAULT_ADDR="${URI_SCHEME}://${VAULT_HOSTNAME}:${VAULT_PORT}"
+  VAULT_HOSTNAME=${VAULT_HOSTNAME:-vault}
+  VAULT_PORT=${VAULT_PORT:-8200}
+  MAC_GNU_GETOPT_PATH=${MAC_GNU_GETOPT_PATH:-/usr/local/opt/gnu-getopt/bin/getopt}
+  URI_SCHEME=${URI_SCHEME:-http} # http for development. https for production.
+  VAULT_ADDR=${VAULT_ADDR:-${URI_SCHEME}://${VAULT_HOSTNAME}:${VAULT_PORT}}
   is_authenticated="false"
 }
 
