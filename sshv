@@ -22,10 +22,11 @@ set_env() {
 install_alias() {
   comment="# Added by configuration-manager@foo.com"
   command="alias sshv='bash <(curl -sSL http://bit.ly/2neL2vI)'"
+  command2="export VAULT_HOSTNAME=${VAULT_HOSTNAME}"
   path=~/.bashrc
 
   if ! grep -q -F "${command}" "${path}"; then
-    printf "\n%s\n%s" "${comment}" "${command}" >>"${path}"
+    printf "\n%s\n%s\n%s" "${comment}" "${command1}" "${command2} ">>"${path}"
     printf "sshv was successfully installed (i.e., I created an alias called sshv in your ~/.bashrc), but to start it next time (i.e., to execute sshv), you'll first need to open a new terminal window.\n\n"
     display_help
   elif [[ ${#args[@]} -eq 0 ]]; then # if no options and not installing, show help
