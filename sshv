@@ -172,8 +172,7 @@ check_token() {
     if grep -q "error" "${resfile}"; then
       printf "Error from vault while checking current token: %s. Possible reasons:\n" "$(cat ${resfile})"
       printf "  1. Your vault policy does not have read access to auth/token/lookup.\n"
-      printf "  2. This is your first launch of sshv.\n"
-      printf "  3. Your vault token expired, so you must re-authenticate.\n\n"
+      printf "  2. Your vault token expired, so you must re-authenticate.\n\n"
       delete_file "${resfile}"
     else # if you get here, your token is presumably still valid
       is_authenticated="true"
