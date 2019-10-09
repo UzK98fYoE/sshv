@@ -25,7 +25,7 @@ install_alias() {
   command2="export VAULT_HOSTNAME=${VAULT_HOSTNAME}"
   path=~/.bashrc
 
-  if ! grep -q -F "${command}" "${path}"; then
+  if ! grep -q -F "${command1}" "${path}"; then
     printf "\n%s\n%s\n%s" "${comment}" "${command1}" "${command2} ">>"${path}"
     printf "sshv was successfully installed (i.e., I created an alias called sshv in your ~/.bashrc), but to start it next time (i.e., to execute sshv), you'll first need to open a new terminal window.\n\n"
     display_help
