@@ -112,10 +112,8 @@ req_getopt() {
 
   # override getopt shell built-in with gnu version but only for this script:
   # https://stackoverflow.com/a/47542834/1231693
-  if [[ -z ${FLAGS_GETOPT_CMD+x} ]]; then
-    export PATH="/usr/local/opt/gnu-getopt/bin:$PATH"
-    export FLAGS_GETOPT_CMD="${MAC_GNU_GETOPT_PATH}"
-  fi
+  export PATH="/usr/local/opt/gnu-getopt/bin:$PATH"
+  export FLAGS_GETOPT_CMD="${MAC_GNU_GETOPT_PATH}"
 }
 
 # Check prereqs
@@ -328,10 +326,10 @@ run_ssh() {
 # run
 main() {
   install_alias
-  get_options "$@"
-  set_env
   get_os
+  set_env
   check_prereqs
+  get_options "$@"
   check_network
   create_sshv_config_dir
   authenticate_to_vault
