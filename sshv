@@ -26,7 +26,7 @@ install_alias() {
 
   if ! grep -q -F "${command}" "${path}"; then
     printf "\n%s\n%s" "${comment}" "${command}" >>"${path}"
-    printf "sshv was successfully installed (for details, vi ~/.bashrc). To use it, open a new bash login shell or, to use it immediately, enter this:\n  source ~/.bashrc\n\n"
+    printf "sshv was successfully installed (i.e., I created an alias called sshv in your ~/.bashrc), but to start it next time (i.e., to execute sshv), you'll first need to open a new terminal window.\n\n"
   fi
 }
 
