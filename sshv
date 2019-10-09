@@ -172,7 +172,6 @@ check_token() {
 
 # Get AD username
 get_ad_username() {
-  set -x
   read -er -p "Enter your Active Directory (AD) username: " -i "${ad_username}" ad_username
   [[ -z ${ad_username:+x} ]] && { printf "\nError: no username\n"; exit 1; }
 
