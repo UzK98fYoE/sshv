@@ -3,7 +3,7 @@
 # ssh to hosts via certificates using hashicorp vault as the Certificate Authority (CA)
 #
 # Public URL: http://bit.ly/2neL2vI
-# Usage: bash <(curl -sSL http://bit.ly/2neL2vI)
+# Usage: bash <(curl -sL http://bit.ly/2neL2vI)
 
 # Troubleshooting: Check your current login token
 # curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request GET $VAULT_ADDR/v1/auth/token/lookup
