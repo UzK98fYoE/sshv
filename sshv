@@ -147,12 +147,12 @@ create_sshv_config_dir() {
 
 # Validate an existing token, if it exists
 check_token() {
-  resfile="checktoken.txt" # file to hold curl results temporarily
+  resfile="checktoken.txt"           # file to hold curl results temporarily
+  userfile="$HOME/.sshv/ad_username" # path of persisted username
 
   # if the token exists, check if token is valid
   if [[ -f ~/.sshv/token ]]; then
     # if the token exists, the persisted username should exist too
-    userfile="$HOME/.sshv/ad_username"                         # path of persisted username
     [[ -f "${userfile}" ]] && ad_username=$(cat "${userfile}") # load username from disk if persisted
 
     VAULT_TOKEN="$(cat ~/.sshv/token)"
@@ -172,6 +172,7 @@ check_token() {
 
 # Get AD username
 get_ad_username() {
+  set -x
   read -er -p "Enter your Active Directory (AD) username: " -i "${ad_username}" ad_username
   [[ -z ${ad_username:+x} ]] && { printf "\nError: no username\n"; exit 1; }
 
@@ -295,7 +296,6 @@ delete_file() {
 get_cert() {
   resfile="curl_sig_req_results.txt" # file to hold curl results temporarily
 
-
   curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request POST \
   --data @csr.json "${VAULT_ADDR}/v1/users-ca/sign/role1" -o "${resfile}"
 
@@ -304,7 +304,7 @@ get_cert() {
     printf "\nError from while getting certificate from vault: %s. Possible reasons:\n" "$(cat ${resfile})"
     printf "  1. In vault, auth/ldap/users/%s does not have a vault policy. \n" "${ad_username}"
     printf "  2. In vault, auth/ldap/users/%s can not read users-ca/sign/role1.\n" "${ad_username}"
-    printf "  3. Your vault token's 'token_num_uses' decreased below 0--i.e., you've used this token too many times.\n"
+    printf "  3. Your vault token's 'token_num_uses' decreased below 0--i.e., you've used this token too many times. Run sshv again.\n"
     delete_file "${resfile}"
     exit 1
    fi
@@ -314,20 +314,15 @@ get_cert() {
   delete_file "csr.json"
 }
 
-# Update ssh_config if not updated so that ssh will Automatically try using that cert on new connections
-add_identityfile() {
-  comment="# Added by configuration-manager@foo.com"
-  keyword_pair='IdentityFile ~/.ssh/id_rsa_vault'
-  path=~/.ssh/config
-  grep -q -F "${keyword_pair}" "${path}" || printf "\n%s\n%s" "${comment}" "${keyword_pair}" >>"${path}"
-}
-
 # Run ssh command or give instructions to do that
 run_ssh() {
   if [[ -z "${args[*]+x}" ]]; then
     printf "Success. Try something like: sshv user1@sshserver OR sshv user1@sshserver echo hello-world\n"
   else
-    ssh -o IdentitiesOnly=yes ${args[*]}
+    ssh -o identitiesonly=yes \
+        -o certificatefile=~/.ssh/id_rsa_vault-cert.pub \
+        -i ~/.ssh/id_rsa_vault \
+         "${args[@]}"
   fi
 }
 
@@ -344,7 +339,6 @@ main() {
   create_keypair
   set_csr_parms
   get_cert
-  add_identityfile
   run_ssh
 }
 
