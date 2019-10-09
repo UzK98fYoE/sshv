@@ -26,8 +26,7 @@ install_alias() {
 
   if ! grep -q -F "${command}" "${path}"; then
     printf "\n%s\n%s" "${comment}" "${command}" >>"${path}"
-    printf "sshv was succesfully installed (for details, vi ~/.bashrc). To use it, open a new bash login shell or, to use it immediately, enter this:\n  source ~/.bashrc\n"
-    display_help
+    printf "sshv was successfully installed (for details, vi ~/.bashrc). To use it, open a new bash login shell or, to use it immediately, enter this:\n  source ~/.bashrc\n\n"
   fi
 }
 
@@ -316,6 +315,7 @@ get_cert() {
 run_ssh() {
   if [[ -z "${args[*]+x}" ]]; then
     printf "Success. Try something like: sshv user1@sshserver OR sshv user1@sshserver echo hello-world\n"
+    display_help
   else
     ssh -o identitiesonly=yes \
         -o certificatefile=~/.ssh/id_rsa_vault-cert.pub \
@@ -326,11 +326,11 @@ run_ssh() {
 
 # run
 main() {
-  install_alias
   get_os
   set_env
   check_prereqs
   get_options "$@"
+  install_alias
   check_network
   create_sshv_config_dir
   authenticate_to_vault
