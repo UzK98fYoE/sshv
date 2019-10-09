@@ -122,6 +122,10 @@ check_prereqs() {
   req_ssh
   req_jq
 
+  # sanity checks
+  [[ "${VAULT_HOSTNAME}" == "vault" ]] { printf "Error: VAULT_HOSTNAME is not set. Try something like this:\n  \
+    export VAULT_HOSTNAME=vault.foo.com"; exit 1; }
+
   case "${os}" in
       Mac*)     req_coreutils; req_getopt;;
     Linux*)                              ;;
