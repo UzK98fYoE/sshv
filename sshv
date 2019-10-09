@@ -42,9 +42,17 @@ Welcome to sshv
 
   Example: sshv user1@sshserver
   Example: sshv user1@sshserver echo "hello world"
+  Example: sshv user1@sshserver -- -p 1022 echo "hello world"
+
+Description
+  sshv is a wrapper for ssh. It logs into vault, creates a local ssh keypair, sends
+  the resulting public key to vault's CA (ssh secrets engine) for signing, receives
+  the resulting certificate, and calls ssh with arguments to use the certificate
+  against the user@server you specify.
 
 Options:
   -h, --help   Display help
+  --           Send everything after 2 dashes as arguments to ssh, not sshv
 
 EOF
 exit
@@ -163,7 +171,8 @@ check_token() {
     if grep -q "error" "${resfile}"; then
       printf "Error from vault while checking current token: %s. Possible reasons:\n" "$(cat ${resfile})"
       printf "  1. Your vault policy does not have read access to auth/token/lookup.\n"
-      printf "  2. Your vault token expired, so you must re-authenticate.\n\n"
+      printf "  2. This is your first launch of sshv.\n\n"
+      printf "  3. Your vault token expired, so you must re-authenticate.\n\n"
       delete_file "${resfile}"
     else # if you get here, your token is presumably still valid
       is_authenticated="true"
@@ -317,7 +326,6 @@ get_cert() {
 # Run ssh command or give instructions to do that
 run_ssh() {
   if [[ -z "${args[*]+x}" ]]; then
-    printf "Success. Try something like: sshv user1@sshserver OR sshv user1@sshserver echo hello-world\n"
     display_help
   else
     ssh -o identitiesonly=yes \
