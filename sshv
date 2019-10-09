@@ -270,7 +270,7 @@ set_csr_parms() {
 tee csr.json >/dev/null <<-EOF
 	{
 	"public_key"       :  "$(tr '\n' '*' <~/.ssh/id_rsa_vault.pub | sed 's/\*/\\n/g')",
-	"ttl"              :  "7s",
+	"ttl"              :  "15s",
 	"valid_principals" :  "user1",
 	"cert_type"        :  "user",
 	"key_id"           :  "user1@client1 created by sshv",
