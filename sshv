@@ -26,7 +26,8 @@ install_alias() {
 
   if ! grep -q -F "${command}" "${path}"; then
     printf "\n%s\n%s" "${comment}" "${command}" >>"${path}"
-    printf "\nsshv was succesfully installed (for details, vi ~/.bashrc). To use it, open a new bash login shell or, to use it immediately, type this now: source ~/.bashrc\n"
+    printf "sshv was succesfully installed (for details, vi ~/.bashrc). To use it, open a new bash login shell or, to use it immediately, enter this:\n  source ~/.bashrc\n"
+    display_help
   fi
 }
 
