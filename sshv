@@ -16,6 +16,9 @@ set_env() {
   MAC_GNU_GETOPT_PATH=${MAC_GNU_GETOPT_PATH:-/usr/local/opt/gnu-getopt/bin/getopt}
   URI_SCHEME=${URI_SCHEME:-http} # http for development or ssh tunnel. https for production.
   VAULT_ADDR=${VAULT_ADDR:-${URI_SCHEME}://${VAULT_HOSTNAME}:${VAULT_PORT}}
+  RED='\033[0;31m'
+  BLUE='\033[0;34m'
+  NC='\033[0m'
   is_authenticated="false"
 }
 
@@ -83,7 +86,11 @@ fi
 # create an ssh tunnel to vault. The tunnel authenticates and secures traffic
 create_tunnel() {
   if ! ssh -NfT vault &>/dev/null; then
-    printf "Error: could not create ssh tunnel.\n"
+    printf "\nError: could not create ssh tunnel. Tips:\n"
+    printf "  1. Add your public key to /home/fwd/.ssh/authorized_keys on the vault server (e.g., via a Jenkins job).\n"
+    printf "  2. Set permissions on the vault server with chmod 0600 /home/fwd/.ssh/authorized_keys\n"
+    printf "  3. Check your spelling of ${RED}%s${NC}\n" "${VAULT_SSH_HOSTNAME}"
+    printf "  4. Check for networking problems reaching ${RED}%s${NC}\n\n" "${VAULT_SSH_HOSTNAME}"
     exit 1
   fi
 }
@@ -208,7 +215,7 @@ check_prereqs() {
 check_network() {
   # On Mac, timeout is part of coreutils (then gtimeout and timeout have same sha1sum)
   if ! timeout 3 bash -c "cat < /dev/null > /dev/tcp/${VAULT_HOSTNAME}/${VAULT_PORT}"; then
-      printf "\nError: I couldn't contact the hostname %s on port %s. Check your networking, host name, and port.\n" "${VAULT_HOSTNAME}" "${VAULT_PORT}"
+      printf "\nError: I couldn't contact the hostname ${RED}%s${NC} on port ${RED}%s${NC}. Check your networking, host name, and port.\n" "${VAULT_HOSTNAME}" "${VAULT_PORT}"
   exit 1
   fi
 }
@@ -233,7 +240,7 @@ check_token() {
 
     # check for curl / vault failure. Example: {"errors":["1 error occurred:\n\t* permission denied\n"]}
     if grep -q "error" "${resfile}"; then
-      printf "Error from vault while checking current token: %s. Possible reasons:\n" "$(cat ${resfile})"
+      printf "Error from vault while checking current token: ${RED}%s${NC}. Possible reasons:\n" "$(cat ${resfile})"
       printf "  1. Your vault policy does not have read access to auth/token/lookup.\n"
       printf "  2. Your vault token expired, so you must re-authenticate.\n\n"
       delete_file "${resfile}"
@@ -284,7 +291,7 @@ send_creds() {
 
   # check for curl / vault failure. Example: {"errors":["1 error occurred:\n\t* permission denied\n"]}
   if grep -q "error" "${resfile}"; then
-    printf "Error from vault while logging into LDAP: %s. Possible reasons:\n" "$(cat ${resfile})"
+    printf "Error from vault while logging into LDAP: ${RED}%s${NC}. Possible reasons:\n" "$(cat ${resfile})"
     printf "  1. $ad_username does not exist in Active Directory.\n" "${ad_username}"
     printf "  2. Your username or password are incorrect.\n"
     delete_file "${resfile}"
@@ -373,9 +380,9 @@ get_cert() {
 
   # Check for failure. Example: {"errors":["1 error occurred:\n\t* permission denied\n"]}
   if grep -q "error" "${resfile}"; then
-    printf "\nError from while getting certificate from vault: %s. Possible reasons:\n" "$(cat ${resfile})"
-    printf "  1. In vault, auth/ldap/users/%s does not have a vault policy. \n" "${ad_username}"
-    printf "  2. In vault, auth/ldap/users/%s can not read users-ca/sign/role1.\n" "${ad_username}"
+    printf "\nError from while getting certificate from vault: ${RED}%s${NC}. Possible reasons:\n" "$(cat ${resfile})"
+    printf "  1. In vault, auth/ldap/users/${RED}%s${NC} does not have a vault policy. \n" "${ad_username}"
+    printf "  2. In vault, auth/ldap/users/${RED}%s${NC} can not read users-ca/sign/role1.\n" "${ad_username}"
     printf "  3. Your vault token's 'token_num_uses' decreased below 0--i.e., you've used this token too many times. Run sshv again.\n"
     delete_file "${resfile}"
     exit 1
@@ -410,7 +417,6 @@ delete_tunnel() {
     kill ${tunnel_pids[@]}
   fi
 }
-
 
 # run
 main() {
