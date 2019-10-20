@@ -17,7 +17,6 @@ set_env() {
   URI_SCHEME=${URI_SCHEME:-http} # http for development or ssh tunnel. https for production.
   VAULT_ADDR=${VAULT_ADDR:-${URI_SCHEME}://${VAULT_HOSTNAME}:${VAULT_PORT}}
   RED='\033[0;31m'
-  BLUE='\033[0;34m'
   NC='\033[0m'
   is_authenticated="false"
 }
@@ -214,7 +213,7 @@ check_prereqs() {
 # Check network connectivity
 check_network() {
   # On Mac, timeout is part of coreutils (then gtimeout and timeout have same sha1sum)
-  if ! timeout 3 bash -c "cat < /dev/null > /dev/tcp/${VAULT_HOSTNAME}/${VAULT_PORT}"; then
+  if ! timeout 3 bash -c "cat < /dev/null > /dev/tcp/localhost/${VAULT_PORT}"; then
       printf "\nError: I couldn't contact the hostname ${RED}%s${NC} on port ${RED}%s${NC}. Check your networking, host name, and port.\n" "${VAULT_HOSTNAME}" "${VAULT_PORT}"
   exit 1
   fi
