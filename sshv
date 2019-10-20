@@ -15,7 +15,7 @@ set_env() {
   VAULT_PORT=${VAULT_PORT:-8200}
   MAC_GNU_GETOPT_PATH=${MAC_GNU_GETOPT_PATH:-/usr/local/opt/gnu-getopt/bin/getopt}
   URI_SCHEME=${URI_SCHEME:-http} # http for development or ssh tunnel. https for production.
-  VAULT_ADDR=${VAULT_ADDR:-${URI_SCHEME}://${VAULT_HOSTNAME}:${VAULT_PORT}}
+  VAULT_ADDR=${VAULT_ADDR:-${URI_SCHEME}://localhost:${VAULT_PORT}}
   RED='\033[0;31m'
   NC='\033[0m'
   is_authenticated="false"
