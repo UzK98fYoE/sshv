@@ -58,6 +58,16 @@ install_alias() {
   fi
 }
 
+# if running as a container, the (current) assumption is that ~/.sshv/ad_password exists
+check_containerized() {
+  if [[ -f "$HOME/.sshv/ad_password" ]]; then
+    is_container="true"
+  else
+    is_container="false"
+    install_alias
+  fi
+}
+
 # Create a secure ssh tunnel by adding an ssh_config entry
 install_vault_ssh_config() {
   # ensure ~/.ssh exists
@@ -66,6 +76,7 @@ install_vault_ssh_config() {
 
   comment="# Added by sshv"
   path="$HOME/.ssh/config"
+  [[ -f "$HOME/.ssh/config" ]] || touch "$HOME/.ssh/config" # create if nonexistant
 
   # if not already there, add this entry
   if ! grep -q -F "${comment}" "${path}"; then
@@ -212,10 +223,12 @@ check_prereqs() {
 
 # Check network connectivity
 check_network() {
+  # Check if curl results are meaningful. Otherwise, ssh may work to the host but vault's container isn't running.
   # On Mac, timeout is part of coreutils (then gtimeout and timeout have same sha1sum)
-  if ! timeout 3 bash -c "cat < /dev/null > /dev/tcp/localhost/${VAULT_PORT}"; then
-      printf "\nError: I couldn't contact the hostname ${RED}%s${NC} on port ${RED}%s${NC}. Check your networking, host name, and port.\n" "${VAULT_HOSTNAME}" "${VAULT_PORT}"
-  exit 1
+  result="$(timeout 3 curl -sS --request GET http://localhost:${VAULT_PORT}/v1/auth/token/lookup)"
+  if [[ ! $result == *"missing client token"* ]]; then
+      printf "\n${RED}Error${NC}: curl -sS --request GET http://localhost:%s/v1/auth/token/lookup did ${RED}NOT${NC} return the expected \"missing client token\". Is vault running?\n\n" "${VAULT_PORT}"
+      exit 1
   fi
 }
 
@@ -251,7 +264,15 @@ check_token() {
 
 # Get AD username
 get_ad_username() {
-  read -er -p "Enter your Active Directory (AD) username: " -i "${ad_username}" ad_username
+  set -x
+  # the username may be persisted in ~/.sshv when running sshv as a container
+  if [[ "$is_container" == "true" ]]; then
+    ad_username=$(base64 --decode -i ~/.sshv/ad_username)
+  else
+    read -er -p "Enter your Active Directory (AD) username: " -i "${ad_username}" ad_username
+  fi
+
+  # ensure that it's not empty
   [[ -z ${ad_username:+x} ]] && { printf "\nError: no username\n"; exit 1; }
 
   # persist username
@@ -260,8 +281,16 @@ get_ad_username() {
 
 # Get AD password
 get_ad_password() {
-  read -er -s -p "Enter your Active Directory (AD) password: " ad_password
+  # the password may be persisted in ~/.sshv when running sshv as a container
+  if [[ "$is_container" == "true" ]]; then
+    ad_password=$(base64 --decode -i ~/.sshv/ad_password)
+  else
+    read -er -s -p "Enter your Active Directory (AD) password: " ad_password
+  fi
+
+  # ensure it's not empty
   [[ -z ${ad_password:+x} ]] && { printf "\nError: no password\n"; exit 1; }
+
   printf "\n\n" # breathing room
 }
 
@@ -314,12 +343,13 @@ send_creds() {
 
 # Delete the stored credentials
 delete_creds() {
-  if ! shred -u "${creds_filepath}"; then
-    rm -f "${creds_filepath}"
+  if ! shred -u "${creds_filepath}" 2>/dev/null; then
+    rm -f "${creds_filepath}" 2>/dev/null
   fi
 
   # if not deleted, warn
-  [[ -f "${creds_filepath}" ]] && "Warning: could not delete password from disk at $creds_filepath."
+  [[ -f "${creds_filepath}" ]]       && "Warning: could not delete password from disk at $creds_filepath."
+  [[ -f "$HOME/.sshv/ad_password" ]] && "Warning: could not delete password from disk at $HOME/.sshv/ad_password."
 
   unset creds_filepath
   unset ad_password
@@ -352,9 +382,9 @@ tee csr.json >/dev/null <<-EOF
 	{
 	"public_key"       :  "$(tr '\n' '*' <~/.ssh/id_rsa_vault.pub | sed 's/\*/\\n/g')",
 	"ttl"              :  "15s",
-	"valid_principals" :  "user1",
+	"valid_principals" :  "fssops",
 	"cert_type"        :  "user",
-	"key_id"           :  "user1@client1 created by sshv",
+	"key_id"           :  "hey-its-me@client1 created by sshv",
 	"critical_options" :  {},
 	"extension"        :  { "permit-pty":"", "permit-port-forwarding": "" },
 	"cert_type"        :  "user"
@@ -379,7 +409,7 @@ get_cert() {
 
   # Check for failure. Example: {"errors":["1 error occurred:\n\t* permission denied\n"]}
   if grep -q "error" "${resfile}"; then
-    printf "\nError from while getting certificate from vault: ${RED}%s${NC}. Possible reasons:\n" "$(cat ${resfile})"
+    printf "\nError from vault while getting certificate from vault: ${RED}%s${NC}. Possible reasons:\n" "$(cat ${resfile})"
     printf "  1. In vault, auth/ldap/users/${RED}%s${NC} does not have a vault policy. \n" "${ad_username}"
     printf "  2. In vault, auth/ldap/users/${RED}%s${NC} can not read users-ca/sign/role1.\n" "${ad_username}"
     printf "  3. Your vault token's 'token_num_uses' decreased below 0--i.e., you've used this token too many times. Run sshv again.\n"
@@ -424,7 +454,7 @@ main() {
   set_env
   check_prereqs
   get_options "$@"
-  install_alias
+  check_containerized
   install_vault_ssh_config
   create_tunnel
   check_network
