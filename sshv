@@ -273,7 +273,6 @@ check_token() {
 
 # Get AD username
 get_ad_username() {
-  set -x
   # the username may be persisted in ~/.sshv when running sshv as a container
   if [[ "$is_container" == "true" ]]; then
     ad_username=$(base64 --decode -i ~/.sshv/ad_username)
