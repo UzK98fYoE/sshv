@@ -139,8 +139,6 @@ exit
 port_forward() {
   # see ~/.ssh/config
 	ssh -NT vault
-  delete_tunnel
-  exit 0
 }
 
 # get options: https://gist.github.com/cosimo/3760587
