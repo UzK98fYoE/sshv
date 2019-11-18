@@ -127,11 +127,18 @@ Description
   against the user@server you specify.
 
 Options:
-  -h, --help   Display help
-  --           Send everything after 2 dashes as arguments to ssh, not sshv
+  -h, --help          Display help
+  -f, --portforward   Enable http://localhost:8080 and :8200. Exit with Ctrl+C
+  --                  Send everything after 2 dashes as arguments to ssh, not sshv
 
 EOF
 exit
+}
+
+# enable port forwards
+port_forward() {
+  # see ~/.ssh/config
+	ssh -NT vault
 }
 
 # get options: https://gist.github.com/cosimo/3760587
@@ -142,6 +149,7 @@ get_options() {
   while true; do
     case "$1" in
              -h|--help)  display_help ; shift ;;
+             -f|--portforward)  port_forward ; shift ;;
              --)  shift ; args=(); until [[ -z ${1+x} ]]; do args+=("$1"); shift; done; break ;;
                      *)  echo "Internal error!" ; display_help; exit 1 ;;
     esac
