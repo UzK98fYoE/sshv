@@ -47,10 +47,11 @@ install_alias() {
   comment="# Added by sshv"
   command1="alias sshv='bash <(curl -sSL http://bit.ly/2neL2vI)'"
   command2="export VAULT_HOSTNAME=${VAULT_HOSTNAME}"
+  command3="# End of sshv changes"
   path=~/.bashrc
 
   if ! grep -q -F "${command1}" "${path}"; then
-    printf "\n%s\n%s\n%s" "${comment}" "${command1}" "${command2} ">>"${path}"
+    printf "\n%s\n%s\n%s\n%s" "${comment}" "${command1}" "${command2}" "${command3}" >> "${path}"
     printf "sshv was successfully installed (i.e., I created an alias called sshv in your ~/.bashrc), but to start it next time (i.e., to execute sshv), you'll first need to open a new terminal window.\n\n"
     display_help
   elif [[ ${#args[@]} -eq 0 ]]; then # if no options and not installing, show help
@@ -89,8 +90,9 @@ Host vault
    User fwd
    LocalForward localhost:8200 localhost:8200
    LocalForward localhost:8080 localhost:8080
+# End of sshv changes
 EOF
-    [[ $? -eq 0 ]] || print "Error: could not update your ${path}\n"
+  [[ $? -eq 0 ]] || print "Error: could not update your ${path}\n"
 fi
 }
 
@@ -210,11 +212,16 @@ req_getopt() {
 }
 
 # make sure we have an ssh hostname so we can tunnel traffic to vault
-req_ssh_hostname() {
-  if [[ -z ${VAULT_SSH_HOSTNAME:+x} ]]; then
-    printf "Error: VAULT_SSH_HOSTNAME needed. Try like this: export VAULT_SSH_HOSTNAME=vault.foo.com\n"
-    exit 1
+get_ssh_hostname() {
+  local path="$HOME/.sshv/vault_ssh_hostname"
+  local hostname="vault.foo.com"
+
+  if [[ ! -f "${path}" ]]; then
+    read -er -p "Enter the vault ssh server's public hostname or IP: " -i "${hostname}" hostname
+    echo "${hostname}" > "${path}"
   fi
+
+  VAULT_SSH_HOSTNAME=$(cat "${path}")
 }
 
 # Check prereqs
@@ -222,7 +229,6 @@ check_prereqs() {
   # all OS's require these
   req_ssh
   req_jq
-  req_ssh_hostname
 
   case "${os}" in
       Mac*)     req_coreutils; req_getopt;;
@@ -459,13 +465,14 @@ main() {
   set_traps
   get_os
   set_env
+  create_sshv_config_dir
   check_prereqs
   get_options "$@"
   check_containerized
+  get_ssh_hostname
   install_vault_ssh_config
   create_tunnel
   check_network
-  create_sshv_config_dir
   authenticate_to_vault
   create_keypair
   set_csr_parms
