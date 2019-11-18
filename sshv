@@ -139,11 +139,13 @@ exit
 port_forward() {
   # see ~/.ssh/config
 	ssh -NT vault
+  delete_tunnel
+  exit 0
 }
 
 # get options: https://gist.github.com/cosimo/3760587
 get_options() {
-  if ! OPTS=$(getopt -o h --long help -n 'parse-options' -- "$@"); then display_help; exit; fi
+  if ! OPTS=$(getopt -o hf --long help,portforward -n 'parse-options' -- "$@"); then display_help; exit; fi
   eval set -- "$OPTS"
 
   while true; do
