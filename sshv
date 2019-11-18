@@ -403,7 +403,6 @@ authenticate_to_vault() {
 
 # renew this client's certificate for the ssh host running vault
 renew_my_cert() {
-set -x
   # create vaulthost keypair if non-existant
   if [[ ! -f ~/.ssh/id_rsa_vaulthost ]]; then
     ssh-keygen -t rsa -b 4096 -N "" -f ~/.ssh/id_rsa_vaulthost -C "${ad_username} from $(hostname -f) $(ifconfig | awk '/inet 9./{print $2}' | head -n 1) on $(date). created by vault via sshv" &>/dev/null
