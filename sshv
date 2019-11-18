@@ -131,6 +131,7 @@ Description
 Options:
   -h, --help          Display help
   -f, --portforward   Enable http://localhost:8080 and :8200. Exit with Ctrl+C
+  -u, --uninstall     Uninstall sshv
   --                  Send everything after 2 dashes as arguments to ssh, not sshv
 
 EOF
@@ -144,15 +145,24 @@ port_forward() {
 	ssh -NT vault
 }
 
+# uninstall sshv
+uninstall_sshv() {
+  sed '/# Added by sshv/,/# End of sshv/d' ~/.ssh/config > tmpfile && mv tmpfile  ~/.ssh/config
+  sed '/# Added by sshv/,/# End of sshv/d' ~/.bashrc > tmpfile && mv tmpfile ~/.bashrc
+  mv ~/.sshv $(mktemp)  # rather than make a destructive mistake with rm, do a mv to tmp, which will be deleted on reboot
+  echo "sshv succesfully uninstalled"
+}
+
 # get options: https://gist.github.com/cosimo/3760587
 get_options() {
-  if ! OPTS=$(getopt -o hf --long help,portforward -n 'parse-options' -- "$@"); then display_help; exit; fi
+  if ! OPTS=$(getopt -o hfu --long help,portforward,uninstall -n 'parse-options' -- "$@"); then display_help; exit; fi
   eval set -- "$OPTS"
 
   while true; do
     case "$1" in
              -h|--help)  display_help ; shift ;;
              -f|--portforward)  port_forward ; shift ;;
+             -u|--uninstall)  uninstall_sshv ; shift ;;
              --)  shift ; args=(); until [[ -z ${1+x} ]]; do args+=("$1"); shift; done; break ;;
                      *)  echo "Internal error!" ; display_help; exit 1 ;;
     esac
