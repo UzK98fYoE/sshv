@@ -138,7 +138,8 @@ exit
 # enable port forwards
 port_forward() {
   # see ~/.ssh/config
-	if ssh -NT vault; then printf "Options:\n  1. open vault: http://localhost:8200\n  2. open jenkins: http://localhost:8080\n  3. quit: ctrl+c"; fi
+	printf "\nPort forwarding enabled. Options:\n  1. open vault: http://localhost:8200\n  2. open jenkins: http://localhost:8080\n  3. quit: ctrl+c"
+	ssh -NT vault
 }
 
 # get options: https://gist.github.com/cosimo/3760587
