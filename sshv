@@ -383,9 +383,9 @@ tee csr.json >/dev/null <<-EOF
 	{
 	"public_key"       :  "$(tr '\n' '*' <~/.ssh/id_rsa_vault.pub | sed 's/\*/\\n/g')",
 	"ttl"              :  "15s",
-	"valid_principals" :  "fssops",
+	"valid_principals" :  "${ad_username}",
 	"cert_type"        :  "user",
-	"key_id"           :  "hey-its-me@client1 created by sshv",
+	"key_id"           :  "${ad_username} from $(ifconfig | awk '/inet 9./{print $2}') on $(date). created by vault via sshv",
 	"critical_options" :  {},
 	"extension"        :  { "permit-pty":"", "permit-port-forwarding": "" },
 	"cert_type"        :  "user"
