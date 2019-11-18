@@ -463,8 +463,8 @@ get_cert() {
   --data @csr.json "${VAULT_ADDR}/v1/users-ca/sign/role1" -o "${resfile}"
 
   # debugging
-  cat csr.json
-  cat $resfile
+  # cat csr.json
+  # cat $resfile
 
   # Check for failure. Example: {"errors":["1 error occurred:\n\t* permission denied\n"]}
   if grep -q "error" "${resfile}"; then
