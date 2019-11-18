@@ -455,7 +455,7 @@ delete_file() {
 
 # Get certificate from Vault (CA)
 get_cert() {
-  local cert="${1:-~/.ssh/id_rsa_vault-cert.pub}"
+  local cert="${1:-$HOME/.ssh/id_rsa_vault-cert.pub}"
 
   resfile="curl_sig_req_results.txt" # file to hold curl results temporarily
 
