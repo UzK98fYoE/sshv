@@ -87,6 +87,8 @@ install_vault_ssh_config() {
 Host vault
    HostName ${VAULT_SSH_HOSTNAME}
    ServerAliveInterval 3
+   IdentityFile ~/.ssh/id_rsa_vaulthost
+   CertificateFile ~/.ssh/id_rsa_vaulthost-cert.pub
    User fwd
    LocalForward localhost:8200 localhost:8200
    LocalForward localhost:8080 localhost:8080
@@ -141,8 +143,8 @@ exit
 # enable port forwards
 port_forward() {
   # see ~/.ssh/config
-	printf "\nPort forwarding enabled. Options:\n  1. open vault: http://localhost:8200\n  2. open jenkins: http://localhost:8080\n  3. quit: ctrl+c\n\n"
-	ssh -NT vault
+ printf "\nPort forwarding enabled. Options:\n  1. open vault: http://localhost:8200\n  2. open jenkins: http://localhost:8080\n  3. quit: ctrl+c\n\n"
+ ssh -NT vault
 }
 
 # uninstall sshv
@@ -150,13 +152,19 @@ uninstall_sshv() {
   sed '/# Added by sshv/,/# End of sshv/d' ~/.ssh/config > tmpfile && mv tmpfile  ~/.ssh/config
   sed '/# Added by sshv/,/# End of sshv/d' ~/.bashrc > tmpfile && mv tmpfile ~/.bashrc
   mv ~/.sshv "$(mktemp -d)"  # rather than make a destructive mistake with rm, do a mv to tmp, which will be deleted on reboot
+  mv ~/.ssh/id_rsa_vaulthost* "$(mktemp -d)"  # rather than make a destructive mistake with rm, do a mv to tmp, which will be deleted on reboot
   echo "sshv succesfully uninstalled"
   exit 0
 }
 
+# get inventory from vcsa
+get_inventory() {
+  sshv js1 cat /var/cache/inventory/*
+}
+
 # get options: https://gist.github.com/cosimo/3760587
 get_options() {
-  if ! OPTS=$(getopt -o hfu --long help,portforward,uninstall -n 'parse-options' -- "$@"); then display_help; exit; fi
+  if ! OPTS=$(getopt -o hfui --long help,portforward,uninstall,inventory -n 'parse-options' -- "$@"); then display_help; exit; fi
   eval set -- "$OPTS"
 
   while true; do
@@ -164,6 +172,7 @@ get_options() {
              -h|--help)  display_help ; shift ;;
              -f|--portforward)  port_forward ; shift ;;
              -u|--uninstall)  uninstall_sshv ; shift ;;
+             -i|--inventory)  get_inventory ; shift ;;
              --)  shift ; args=(); until [[ -z ${1+x} ]]; do args+=("$1"); shift; done; break ;;
                      *)  echo "Internal error!" ; display_help; exit 1 ;;
     esac
@@ -392,6 +401,19 @@ authenticate_to_vault() {
   fi
 }
 
+# renew this client's certificate for the ssh host running vault
+renew_my_cert() {
+set -x
+  # create vaulthost keypair if non-existant
+  if [[ ! -f ~/.ssh/id_rsa_vaulthost ]]; then
+    ssh-keygen -t rsa -b 4096 -N "" -f ~/.ssh/id_rsa_vaulthost -C "${ad_username} from $(hostname -f) $(ifconfig | awk '/inet 9./{print $2}' | head -n 1) on $(date). created by vault via sshv" &>/dev/null
+  fi
+
+  # Renew for another 6 months
+  set_csr_parms "262800m" "fwd" ~/.ssh/id_rsa_vaulthost.pub
+  get_cert ~/.ssh/id_rsa_vaulthost-cert.pub
+}
+
 # Create a temporary, i.e., worthless after its certificate expires, ssh keypair for this user
 # Currently, this creates an rsa keypair. ed25519 not supported yet in vault
 # Warning: the ssh-keygen -N '' means that the keypair will NOT have a password (but ttl's are short)
@@ -402,22 +424,28 @@ create_keypair() {
   echo printf | ssh-keygen -N '' -t rsa -b 4096 -a 100 -f ~/.ssh/id_rsa_vault >/dev/null
 }
 
-# Set parameters
+# Set csr parameters
+#   $1 = ttl
+#   $2 = principal requested
+#   $3 = public key to sign
 set_csr_parms() {
+local ttl=${1:-15s} # if not provided, default ttl to 15 seconds
+local principals=${2:-"$ad_username"}
+local pubkey=${3:-~/.ssh/id_rsa_vault.pub} # if not provided, default to this path
+
 tee csr.json >/dev/null <<-EOF
 	{
-	"public_key"       :  "$(tr '\n' '*' <~/.ssh/id_rsa_vault.pub | sed 's/\*/\\n/g')",
-	"ttl"              :  "15s",
-	"valid_principals" :  "${ad_username}",
+	"public_key"       :  "$(tr '\n' '*' <${pubkey} | sed 's/\*/\\n/g')",
+	"ttl"              :  "${ttl}",
+	"valid_principals" :  "${principals}",
 	"cert_type"        :  "user",
-	"key_id"           :  "${ad_username} from $(hostname -f) $(ifconfig | awk '/inet 9./{print $2}') on $(date). created by vault via sshv",
+	"key_id"           :  "${ad_username} from $(hostname -f) $(ifconfig | awk '/inet 9./{print $2}' | head -n 1) on $(date). created by vault via sshv",
 	"critical_options" :  {},
 	"extension"        :  { "permit-pty":"", "permit-port-forwarding": "" },
 	"cert_type"        :  "user"
 	}
 EOF
 }
-
 
 # delete file
 delete_file() {
@@ -428,10 +456,16 @@ delete_file() {
 
 # Get certificate from Vault (CA)
 get_cert() {
+  local cert="${1:-~/.ssh/id_rsa_vault-cert.pub}"
+
   resfile="curl_sig_req_results.txt" # file to hold curl results temporarily
 
   curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request POST \
   --data @csr.json "${VAULT_ADDR}/v1/users-ca/sign/role1" -o "${resfile}"
+
+  # debugging
+  cat csr.json
+  cat $resfile
 
   # Check for failure. Example: {"errors":["1 error occurred:\n\t* permission denied\n"]}
   if grep -q "error" "${resfile}"; then
@@ -443,7 +477,7 @@ get_cert() {
     exit 1
    fi
 
-  jq -r ".data.signed_key" < "${resfile}" >~/.ssh/id_rsa_vault-cert.pub
+  jq -er ".data.signed_key" < "${resfile}" >"${cert}"
   delete_file "${resfile}"
   delete_file "csr.json"
 }
@@ -485,6 +519,7 @@ main() {
   create_tunnel
   check_network
   authenticate_to_vault
+  renew_my_cert
   create_keypair
   set_csr_parms
   get_cert
