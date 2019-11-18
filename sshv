@@ -151,6 +151,7 @@ uninstall_sshv() {
   sed '/# Added by sshv/,/# End of sshv/d' ~/.bashrc > tmpfile && mv tmpfile ~/.bashrc
   mv ~/.sshv $(mktemp)  # rather than make a destructive mistake with rm, do a mv to tmp, which will be deleted on reboot
   echo "sshv succesfully uninstalled"
+  exit 0
 }
 
 # get options: https://gist.github.com/cosimo/3760587
