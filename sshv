@@ -449,9 +449,7 @@ delete_tunnel() {
   tunnel_pids=("$(ps ax | awk '/[s]sh -NfT vault/{print $1}' | tr '\n' ' ')")
 
   # kill them all
-  if [[ "${tunnel_pids[*]}" == "" ]]; then
-    printf "Error: could not kill any pids. You might have run a nested sshv.\n"
-  else
+  if [[ ! "${tunnel_pids[*]}" == "" ]]; then
     kill ${tunnel_pids[@]}
   fi
 }
