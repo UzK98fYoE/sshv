@@ -403,11 +403,14 @@ authenticate_to_vault() {
 
 # trust the hosts ca (avoids the "The authenticity of host foo (IP) can't be established")
 trust_hosts_ca() {
-  curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request GET $VAULT_ADDR/v1/hosts-ca/public_key > ~/.sshv/hosts_ca.pub
-
-sudo tee /etc/ssh/ssh_known_hosts >/dev/null <<-EOF
-	@cert-authority *.fss.ibm.com,*.wfss.ibm.com,*.local $(cat ~/.sshv/hosts_ca.pub)
+  curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request GET "$VAULT_ADDR/v1/hosts-ca/public_key" > ~/.sshv/hosts_ca.pub
+  if [[ ! -f /etc/ssh/ssh_known_hosts ]]; then
+    sudo tee /etc/ssh/ssh_known_hosts >/dev/null <<EOF
+@cert-authority *.fss.ibm.com,*.wfss.ibm.com,*.local $(cat ~/.sshv/hosts_ca.pub)
 EOF
+    sudo chown "$(id -u):$(id -g)" /etc/ssh/ssh_known_hosts
+    sudo chmod 770 /etc/ssh/ssh_known_hosts
+  fi
 }
 
 # renew this client's certificate for the ssh host running vault
