@@ -401,6 +401,15 @@ authenticate_to_vault() {
   fi
 }
 
+# trust the hosts ca (avoids the "The authenticity of host foo (IP) can't be established")
+trust_hosts_ca() {
+  curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request GET $VAULT_ADDR/v1/hosts-ca/public_key > ~/.sshv/hosts_ca.pub
+
+sudo tee /etc/ssh/ssh_known_hosts >/dev/null <<-EOF
+	@cert-authority *.fss.ibm.com,*.wfss.ibm.com,*.local $(cat ~/.sshv/hosts_ca.pub)
+EOF
+}
+
 # renew this client's certificate for the ssh host running vault
 renew_my_cert() {
   # create vaulthost keypair if non-existant
@@ -518,6 +527,7 @@ main() {
   create_tunnel
   check_network
   authenticate_to_vault
+  trust_hosts_ca
   renew_my_cert
   create_keypair
   set_csr_parms
