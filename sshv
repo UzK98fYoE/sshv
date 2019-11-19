@@ -160,11 +160,11 @@ uninstall_sshv() {
 
 # get inventory from vcsa
 get_inventory() {
-  pushd ~/.sshv || { echo "could not pushd ~/.sshv"; exit; }
+  pushd ~/.sshv &>/dev/null || { echo "could not pushd ~/.sshv"; exit; }
   scp vault:vcsa-inventory .
   jq '..| {name: .name?, state: ."guest.guestState"?, hostname: ."guest.hostName"?, ip: ."guest.ipAddress"?} | select(.ip)' vcsa-inventory
   rm vcsa-inventory
-  popd || { echo "could not popd ~/.sshv"; exit; }
+  popd &>/dev/null || { echo "could not popd ~/.sshv"; exit; }
   exit 0
 }
 
