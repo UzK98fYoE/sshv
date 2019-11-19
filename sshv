@@ -159,7 +159,9 @@ uninstall_sshv() {
 
 # get inventory from vcsa
 get_inventory() {
-  sshv js1 cat /var/cache/inventory/*
+  scp vault:vcsa-inventory .
+  jq '..| {name: .name?, state: ."guest.guestState"?, hostname: ."guest.hostName"?, ip: ."guest.ipAddress"?} | select(.ip)' vcsa-inventory
+  rm vcsa-inventory
 }
 
 # get options: https://gist.github.com/cosimo/3760587
