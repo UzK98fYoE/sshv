@@ -133,7 +133,7 @@ Description
 Options:
   -h, --help          Display help
   -f, --portforward   Enable http://localhost:8080 and :8200. Exit with Ctrl+C
-  -i, --inventory     Get inventory from vcsa
+  -s, --search        Search vcsa inventory. Example: sshv -s js1
   -u, --uninstall     Uninstall sshv
   --                  Send everything after 2 dashes as arguments to ssh, not sshv
 
@@ -160,7 +160,7 @@ uninstall_sshv() {
 
 # get inventory from vcsa
 # $1 = the search pattern (e.g., foo or 111)
-get_inventory() {
+search_inventory() {
   pushd ~/.sshv &>/dev/null || { echo "could not pushd ~/.sshv"; exit; }
   scp -q vault:vcsa-inventory .
   jq -e '..| {name: .name?, state: ."guest.guestState"?, hostname: ."guest.hostName"?, \
@@ -182,7 +182,7 @@ get_options() {
              -h|--help)  display_help ; shift ;;
              -f|--portforward)  port_forward ; shift ;;
              -u|--uninstall)  uninstall_sshv ; shift ;;
-             -i|--inventory)  get_inventory $2; shift ;;
+             -s|--search)     search_inventory "${2}"; shift ;;
              --)  shift ; args=(); until [[ -z ${1+x} ]]; do args+=("$1"); shift; done; break ;;
                      *)  echo "Internal error!" ; display_help; exit 1 ;;
     esac
