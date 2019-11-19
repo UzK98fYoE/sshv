@@ -165,6 +165,7 @@ get_inventory() {
   jq '..| {name: .name?, state: ."guest.guestState"?, hostname: ."guest.hostName"?, ip: ."guest.ipAddress"?} | select(.ip)' vcsa-inventory
   rm vcsa-inventory
   popd || { echo "could not popd ~/.sshv"; exit; }
+  exit 0
 }
 
 # get options: https://gist.github.com/cosimo/3760587
