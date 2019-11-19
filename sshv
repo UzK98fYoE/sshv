@@ -164,7 +164,7 @@ search_inventory() {
   pushd ~/.sshv &>/dev/null || { echo "could not pushd ~/.sshv"; exit; }
   scp -q vault:vcsa-inventory .
   jq -e '..| {name: .name?, state: ."guest.guestState"?, hostname: ."guest.hostName"?, ip: ."guest.ipAddress"?} | select(.state)' vcsa-inventory > tmpjq
-  jq -er "select((.name | try contains(\"${1}\")) or (.hostname | try contains(\"${1}\")) or (.ip | try contains(\"${1}\")) or (.state | try contains(\"${1}\")))|[.ip,.hostname,.name,.state]|@csv" tmpjq | tr -d \" | tr , ' ' | column -t
+  jq -er "select((.name | try contains(\"${1}\")) or (.hostname | try contains(\"${1}\")) or (.ip | try contains(\"${1}\")) or (.state | try contains(\"${1}\")))|[.ip,.hostname,.state]|@csv" tmpjq | tr -d \" | tr , ' ' | column -t
 
   rm vcsa-inventory tmpjq
   popd &>/dev/null || { echo "could not popd ~/.sshv"; exit; }
