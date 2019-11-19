@@ -159,18 +159,20 @@ uninstall_sshv() {
 }
 
 # get inventory from vcsa
+# $1 = the search pattern (e.g., foo or 111)
 get_inventory() {
   pushd ~/.sshv &>/dev/null || { echo "could not pushd ~/.sshv"; exit; }
   scp vault:vcsa-inventory .
-  jq '..| {name: .name?, state: ."guest.guestState"?, hostname: ."guest.hostName"?, ip: ."guest.ipAddress"?} | select(.ip)' vcsa-inventory
-  rm vcsa-inventory
+  jq -e '..| {name: .name?, state: ."guest.guestState"?, hostname: ."guest.hostName"?, ip: ."guest.ipAddress"?} | select(.hostName)' vcsa-inventory > tmp
+  jq -e 'select((.name | contains("jm")) or (.ip | contains("150")))' tmp
+  rm vcsa-inventory tmp
   popd &>/dev/null || { echo "could not popd ~/.sshv"; exit; }
   exit 0
 }
 
 # get options: https://gist.github.com/cosimo/3760587
 get_options() {
-  if ! OPTS=$(getopt -o hfui --long help,portforward,uninstall,inventory -n 'parse-options' -- "$@"); then display_help; exit; fi
+  if ! OPTS=$(getopt -o hfui: --long help,portforward,uninstall,inventory: -n 'parse-options' -- "$@"); then display_help; exit; fi
   eval set -- "$OPTS"
 
   while true; do
@@ -178,7 +180,7 @@ get_options() {
              -h|--help)  display_help ; shift ;;
              -f|--portforward)  port_forward ; shift ;;
              -u|--uninstall)  uninstall_sshv ; shift ;;
-             -i|--inventory)  get_inventory ; shift ;;
+             -i|--inventory)  get_inventory $1; shift ;;
              --)  shift ; args=(); until [[ -z ${1+x} ]]; do args+=("$1"); shift; done; break ;;
                      *)  echo "Internal error!" ; display_help; exit 1 ;;
     esac
