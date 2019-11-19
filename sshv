@@ -162,10 +162,12 @@ uninstall_sshv() {
 # $1 = the search pattern (e.g., foo or 111)
 get_inventory() {
   pushd ~/.sshv &>/dev/null || { echo "could not pushd ~/.sshv"; exit; }
-  scp vault:vcsa-inventory .
-  jq -e '..| {name: .name?, state: ."guest.guestState"?, hostname: ."guest.hostName"?, ip: ."guest.ipAddress"?} | select(.hostName)' vcsa-inventory > tmp
-  jq -e "select((.name | contains(\"${1}\")) or (.ip | contains(\"{$1}\")))" tmp
-  rm vcsa-inventory tmp
+  scp -q vault:vcsa-inventory .
+  jq -e '..| {name: .name?, state: ."guest.guestState"?, hostname: ."guest.hostName"?, \
+         ip: ."guest.ipAddress"?} | select(.state)' vcsa-inventory > tmpjq
+  jq -e "select((.name | try contains(\"${1}\")) or (.hostname | try contains(\"${1}\")) \
+         or (.ip | try contains(\"${1}\")) or (.state | try contains(\"${1}\")))" tmpjq
+  rm vcsa-inventory tmpjq
   popd &>/dev/null || { echo "could not popd ~/.sshv"; exit; }
   exit 0
 }
@@ -180,7 +182,7 @@ get_options() {
              -h|--help)  display_help ; shift ;;
              -f|--portforward)  port_forward ; shift ;;
              -u|--uninstall)  uninstall_sshv ; shift ;;
-             -i|--inventory)  get_inventory $1; shift ;;
+             -i|--inventory)  get_inventory $2; shift ;;
              --)  shift ; args=(); until [[ -z ${1+x} ]]; do args+=("$1"); shift; done; break ;;
                      *)  echo "Internal error!" ; display_help; exit 1 ;;
     esac
