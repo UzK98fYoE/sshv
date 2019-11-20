@@ -19,6 +19,7 @@ set_env() {
   RED='\033[0;31m'
   NC='\033[0m'
   is_authenticated="false"
+  userfile="$HOME/.sshv/ad_username" # path of persisted username
 }
 
 # Handle sigterm
@@ -61,11 +62,10 @@ install_alias() {
 
 # if running as a container, the (current) assumption is that ~/.sshv/ad_password exists
 check_containerized() {
-  if [[ -f "$HOME/.sshv/ad_password" ]]; then
+  if [[ -f /.dockerenv ]]; then
     is_container="true"
   else
     is_container="false"
-    install_alias
   fi
 }
 
@@ -87,8 +87,8 @@ install_vault_ssh_config() {
 Host vault
    HostName ${VAULT_SSH_HOSTNAME}
    ServerAliveInterval 3
-   IdentityFile ~/.ssh/id_rsa_vaulthost
-   CertificateFile ~/.ssh/id_rsa_vaulthost-cert.pub
+   IdentityFile ~/.ssh/id_ed25519_vaulthost
+   CertificateFile ~/.ssh/id_ed25519_vaulthost-cert.pub
    User fwd
    LocalForward localhost:8200 localhost:8200
    LocalForward localhost:8080 localhost:8080
@@ -203,7 +203,7 @@ get_os() {
 # Require this
 req_jq() {
   if ! type jq &>/dev/null; then
-    printf "Please install jq first\n"
+    printf "Please install jq first:\n Mac: brew install jq\n Ubuntu: sudo apt install jq\n RHEL: yum install epel-release -y && yum install jq -y\n"
     exit 1
   fi
 }
@@ -241,7 +241,7 @@ req_getopt() {
 }
 
 # make sure we have an ssh hostname so we can tunnel traffic to vault
-get_ssh_hostname() {
+get_vaulthost() {
   local path="$HOME/.sshv/vault_ssh_hostname"
   local hostname="vault.foo.com"
 
@@ -251,6 +251,21 @@ get_ssh_hostname() {
   fi
 
   VAULT_SSH_HOSTNAME=$(cat "${path}")
+}
+
+# create ssh key for vaulthost. this is a one-time thing
+create_vaulthost_keys() {
+  # create keys if non-existant
+  if [[ ! -f ~/.ssh/id_ed25519_vaulthost ]]; then
+    # ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519_vaulthost \
+    #   -C "$(whoami) from $(hostname -f) $(ifconfig | awk '/inet [0-9]./{print $2}' | head -n 1) on $(date "+%Y%m%d-%H%M%S"). temporary key" \
+    #   &>/dev/null <<< n # n means no to overwrite
+    ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519_vaulthost -C "sshv temporary key" &>/dev/null <<< n # n means no to overwrite
+    printf "\nOn the vault ssh host, add the following public key to /home/fwd/.ssh/authorized_keys:\n"
+    printf "${RED}%s${NC}\n" "$(cat ~/.ssh/id_ed25519_vaulthost.pub)"
+    printf "NOTE: After this initial connection, sshv will use certificates, not keys, for autentication. The authorized_keys entry above will be deleted automatically.\n\n"
+    read -er -p "Press Enter once added..."
+  fi
 }
 
 # Check prereqs
@@ -285,7 +300,6 @@ create_sshv_config_dir() {
 # Validate an existing token, if it exists
 check_token() {
   resfile="checktoken.txt"           # file to hold curl results temporarily
-  userfile="$HOME/.sshv/ad_username" # path of persisted username
 
   # if the token exists, check if token is valid
   if [[ -f ~/.sshv/token ]]; then
@@ -309,12 +323,7 @@ check_token() {
 
 # Get AD username
 get_ad_username() {
-  # the username may be persisted in ~/.sshv when running sshv as a container
-  if [[ "$is_container" == "true" ]]; then
-    ad_username=$(base64 --decode -i ~/.sshv/ad_username)
-  else
-    read -er -p "Enter your Active Directory (AD) username: " -i "${ad_username}" ad_username
-  fi
+  read -er -p "Enter your Active Directory (AD) username: " -i "${ad_username}" ad_username
 
   # ensure that it's not empty
   [[ -z ${ad_username:+x} ]] && { printf "\nError: no username\n"; exit 1; }
@@ -325,12 +334,7 @@ get_ad_username() {
 
 # Get AD password
 get_ad_password() {
-  # the password may be persisted in ~/.sshv when running sshv as a container
-  if [[ "$is_container" == "true" ]]; then
-    ad_password=$(base64 --decode -i ~/.sshv/ad_password)
-  else
-    read -er -s -p "Enter your Active Directory (AD) password: " ad_password
-  fi
+  read -er -s -p "Enter your Active Directory (AD) password: " ad_password
 
   # ensure it's not empty
   [[ -z ${ad_password:+x} ]] && { printf "\nError: no password\n"; exit 1; }
@@ -415,7 +419,7 @@ trust_hosts_ca() {
   curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request GET "$VAULT_ADDR/v1/hosts-ca/public_key" > ~/.sshv/hosts_ca.pub
   if [[ ! -f /etc/ssh/ssh_known_hosts ]]; then
     sudo tee /etc/ssh/ssh_known_hosts >/dev/null <<EOF
-@cert-authority *.fss.ibm.com,*.wfss.ibm.com,*.local $(cat ~/.sshv/hosts_ca.pub)
+@cert-authority * $(cat ~/.sshv/hosts_ca.pub)
 EOF
     sudo chown "$(id -u):$(id -g)" /etc/ssh/ssh_known_hosts
     sudo chmod 770 /etc/ssh/ssh_known_hosts
@@ -424,14 +428,9 @@ EOF
 
 # renew this client's certificate for the ssh host running vault
 renew_my_cert() {
-  # create vaulthost keypair if non-existant
-  if [[ ! -f ~/.ssh/id_rsa_vaulthost ]]; then
-    ssh-keygen -t rsa -b 4096 -N "" -f ~/.ssh/id_rsa_vaulthost -C "${ad_username} from $(hostname -f) $(ifconfig | awk '/inet 9./{print $2}' | head -n 1) on $(date). created by vault via sshv" &>/dev/null
-  fi
-
   # Renew for another 6 months
-  set_csr_parms "262800m" "fwd" ~/.ssh/id_rsa_vaulthost.pub
-  get_cert ~/.ssh/id_rsa_vaulthost-cert.pub
+  set_csr_parms "262800m" "fwd" ~/.ssh/id_ed25519_vaulthost.pub
+  get_cert ~/.ssh/id_ed25519_vaulthost-cert.pub
 }
 
 # Create a temporary, i.e., worthless after its certificate expires, ssh keypair for this user
@@ -534,7 +533,9 @@ main() {
   check_prereqs
   get_options "$@"
   check_containerized
-  get_ssh_hostname
+  install_alias
+  get_vaulthost
+  create_vaulthost_keys
   install_vault_ssh_config
   create_tunnel
   check_network
