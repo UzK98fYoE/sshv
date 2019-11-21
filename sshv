@@ -1004,7 +1004,7 @@ create_keypair() {
 #   $3 = public key to sign
 set_csr_parms() {
 local ttl=${1:-15s} # if not provided, default ttl to 15 seconds
-local principals=${2:-"$ad_username"}
+local principals="${2:-$ad_username},fssops"
 local pubkey=${3:-~/.ssh/id_rsa_vault.pub} # if not provided, default to this path
 
 tee csr.json >/dev/null <<-EOF
