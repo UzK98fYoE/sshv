@@ -57,10 +57,11 @@ install() {
     create_vaulthost_keys
     install_vault_ssh_config
     echo
-    echo "sshv successfully installed. Details:"
-    echo " 1. I created an alias called sshv in your ~/.bashrc"
-    echo " 2. I created an entry to reach vault in ~/.ssh/config"
-    echo " 3. to complete installation, type this: source ~/.bashrc"
+    echo "Almost done. Please enter this command: source ~/.bashrc"
+    echo " Details:"
+    echo "   1. created an alias in ~/.bashrc"
+    echo "   2. created an entry in ~/.ssh/config"
+    echo "   3. created a config directory at ~/.sshv"
     echo
     exit 0
   elif [[ ${#args[@]} -eq 0 ]]; then # if no options and not installing, show help
