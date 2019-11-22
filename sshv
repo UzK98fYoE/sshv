@@ -66,7 +66,11 @@ install() {
     echo "   1. created an alias in ~/.bashrc"
     echo "   2. created an entry in ~/.ssh/config"
     echo "   3. created a config directory at ~/.sshv"
-    echo "   4. to get started, try something like: sshv you@server.com"
+    echo
+    echo " What now?"
+    echo "   1. Try a log in: sshv you@server.com"
+    echo "   2. See examples: sshv --help"
+    echo "   3. Search inventory: ssh -s foo"
     echo
     exit 0
   elif [[ ${#args[@]} -eq 0 ]]; then # if no options and not installing, show help
