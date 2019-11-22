@@ -57,16 +57,16 @@ install() {
     create_vaulthost_keys
     install_vault_ssh_config
     echo
-    echo " #################################################"
-    echo " To finish the installation, enter this command:  "
-    echo "       source ~/.bashrc                           "
-    echo " #################################################"
+    echo " ####################################################### "
+    echo " To finish installing sshv, please enter this command:   "
+    echo "    source ~/.bashrc                                   "
+    echo " ####################################################### "
     echo
     echo " Installation details:"
     echo "   1. created an alias in ~/.bashrc"
     echo "   2. created an entry in ~/.ssh/config"
     echo "   3. created a config directory at ~/.sshv"
-    echo "   4. to uninstall sshv, enter this command: sshv -u"
+    echo "   4. to get started, try something like: sshv you@server.com"
     echo
     exit 0
   elif [[ ${#args[@]} -eq 0 ]]; then # if no options and not installing, show help
