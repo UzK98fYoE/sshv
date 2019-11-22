@@ -56,23 +56,25 @@ install() {
     get_vaulthost
     create_vaulthost_keys
     install_vault_ssh_config
-    echo
-    echo " ####################################################### "
-    echo " To finish installing sshv, please enter this command:   "
-    echo "    source ~/.bashrc                                   "
-    echo " ####################################################### "
-    echo
-    echo " Installation details:"
-    echo "   1. created an alias in ~/.bashrc"
-    echo "   2. created an entry in ~/.ssh/config"
-    echo "   3. created a config directory at ~/.sshv"
-    echo
-    echo " What now?"
-    echo "   1. Try a log in: sshv you@server.com"
-    echo "   2. See examples: sshv --help"
-    echo "   3. Search inventory: ssh -s foo"
-    echo
-    exit 0
+    if [[ "${is_container}" == "false" ]]; then
+      echo
+      echo " ####################################################### "
+      echo " To finish installing sshv, please enter this command:   "
+      echo "    source ~/.bashrc                                   "
+      echo " ####################################################### "
+      echo
+      echo " Installation details:"
+      echo "   1. created an alias in ~/.bashrc"
+      echo "   2. created an entry in ~/.ssh/config"
+      echo "   3. created a config directory at ~/.sshv"
+      echo
+      echo " What now?"
+      echo "   1. Try a log in: sshv you@server.com"
+      echo "   2. See examples: sshv --help"
+      echo "   3. Search inventory: ssh -s foo"
+      echo
+      exit 0
+    fi
   elif [[ ${#args[@]} -eq 0 ]]; then # if no options and not installing, show help
     display_help
   fi
@@ -93,6 +95,9 @@ install_vault_ssh_config() {
   mkdir -p ~/.ssh
   chmod 700 ~/.ssh
 
+  # port forwarding option requires container to listen on all ipv4 interfaces
+  if [[ "${is_container}" == "true" ]]; then interface="0.0.0.0"; else interface="127.0.0.1"; fi
+
   comment="# Added by sshv"
   path="$HOME/.ssh/config"
   [[ -f "$HOME/.ssh/config" ]] || touch "$HOME/.ssh/config" # create if nonexistant
@@ -108,8 +113,8 @@ Host vault
    IdentityFile ~/.ssh/id_ed25519_vaulthost
    CertificateFile ~/.ssh/id_ed25519_vaulthost-cert.pub
    User fwd
-   LocalForward 127.0.0.1:8200 127.0.0.1:8200
-   LocalForward 127.0.0.1:8080 127.0.0.1:8080
+   LocalForward ${interface}:8200 127.0.0.1:8200
+   LocalForward ${interface}:8080 127.0.0.1:8080
 # End of sshv changes
 EOF
   [[ $? -eq 0 ]] || print "Error: could not update your ${path}\n"
@@ -171,7 +176,7 @@ uninstall_sshv() {
   sed '/# Added by sshv/,/# End of sshv/d' ~/.ssh/config > tmpfile && mv -f tmpfile ~/.ssh/config
   sed '/# Added by sshv/,/# End of sshv/d' ~/.bashrc > tmpfile && mv -f tmpfile ~/.bashrc
   mv ~/.sshv "$(mktemp -d)"  # rather than make a destructive mistake with rm, do a mv to tmp, which will be deleted on reboot
-  mv ~/.ssh/id_rsa_vaulthost* "$(mktemp -d)"  # rather than make a destructive mistake with rm, do a mv to tmp, which will be deleted on reboot
+  mv ~/.ssh/id_ed25519_vaulthost* "$(mktemp -d)"  # rather than make a destructive mistake with rm, do a mv to tmp, which will be deleted on reboot
   sudo bash -c 'sed "/# Added by sshv/,/# End of sshv/d" /etc/ssh/ssh_known_hosts > tmpfile && mv tmpfile /etc/ssh/ssh_known_hosts'
   echo "sshv succesfully uninstalled"
   exit 0
@@ -559,9 +564,6 @@ main() {
   get_options "$@"
   check_containerized
   install
-  get_vaulthost
-  create_vaulthost_keys
-  install_vault_ssh_config
   create_tunnel
   check_network
   authenticate_to_vault
