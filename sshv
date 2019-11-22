@@ -57,7 +57,11 @@ install() {
     create_vaulthost_keys
     install_vault_ssh_config
     echo
-    echo "Almost done. Please enter this command: source ~/.bashrc"
+    echo " ####################################### "
+    echo " Please enter this command: "
+    echo "      source ~/.bashrc"
+    echo " ####################################### "
+    echo
     echo " Details:"
     echo "   1. created an alias in ~/.bashrc"
     echo "   2. created an entry in ~/.ssh/config"
