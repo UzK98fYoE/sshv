@@ -60,7 +60,7 @@ install() {
     echo "sshv successfully installed. Details:"
     echo " 1. I created an alias called sshv in your ~/.bashrc"
     echo " 2. I created an entry to reach vault in ~/.ssh/config"
-    echo " 3. to run sshv, close this terminal window and open a new one OR type this: source ~/.bashrc"
+    echo " 3. to complete installation, type this: source ~/.bashrc"
     echo
     exit 0
   elif [[ ${#args[@]} -eq 0 ]]; then # if no options and not installing, show help
