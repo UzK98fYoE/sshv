@@ -101,9 +101,7 @@ EOF
 
 # install sshv locally
 install_local() {
- sudo cp -f /tmp/sshv /usr/local/bin/sshv
- # uncomment!!! TODO
- # sudo curl -sSL http://bit.ly/2neL2vI -o /usr/local/bin/sshv # download latest version first
+ sudo curl -sSL http://bit.ly/2neL2vI -o /usr/local/bin/sshv # download latest version first
  sudo chmod +x /usr/local/bin/sshv
 }
 
@@ -133,7 +131,7 @@ get_install_type() {
 show_install_details() {
       echo
       echo " ####################################################### "
-      printf "       ${GREEN}Installation successful${NC}            "
+      printf "       ${GREEN}Installation successful${NC}         \n "
       echo " ####################################################### "
       echo
       echo " Installation details:                                   "
@@ -535,19 +533,24 @@ authenticate_to_vault() {
 # trust the hosts ca (avoids the "The authenticity of host foo (IP) can't be established")
 trust_hosts_ca() {
   curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request GET "$VAULT_ADDR/v1/hosts-ca/public_key" > ~/.sshv/hosts_ca.pub
-  comment1="# Added by sshv"
-  command1="@cert-authority * $(cat ~/.sshv/hosts_ca.pub)"
-  comment2="# End of sshv changes"
   path=/etc/ssh/ssh_known_hosts
-  if ! grep -q -F "${command1}" "${path}" 2>/dev/null; then
-    sudo tee "${path}" >/dev/null <<EOF
+  command1="@cert-authority * $(cat ~/.sshv/hosts_ca.pub)"
+
+  # return if the pub key is already present
+  if grep -q -F "${command1}" "${path}" 2>/dev/null; then return; fi
+
+  # otherwise, continue
+  comment1="# Added by sshv"
+  comment2="# End of sshv changes"
+  sudo tee "${path}" >/dev/null <<EOF
 ${comment1}
 ${command1}
 ${comment2}
 EOF
+
+  # harden
   sudo chown "$(id -u):$(id -g)" /etc/ssh/ssh_known_hosts
   sudo chmod 770 /etc/ssh/ssh_known_hosts
-  fi
 }
 
 # renew this client's certificate for the ssh host running vault
