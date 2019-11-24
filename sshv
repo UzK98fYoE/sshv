@@ -151,7 +151,7 @@ install() {
   # [[ "${is_container}" == "true" ]] && return
 
   # if already installed (last step of install is creating ~/.ssh/config), return (if args present) or display help (if no args present)
-  if grep -q "# Added by sshv" ~/.ssh/config; then
+  if grep -q "# Added by sshv" ~/.ssh/config 2>/dev/null; then
     [[ ${#args[@]} -eq 0 ]] && display_help || return
   fi
 
@@ -188,7 +188,7 @@ install_vault_ssh_config() {
   path="$HOME/.ssh/config"
 
   # if not already there, add this entry
-  if ! grep -q -F "# Added by sshv" "${path}"; then
+  if ! grep -q -F "# Added by sshv" "${path}" 2>/dev/null; then
     tee -a "${path}" >/dev/null <<EOF
 # Added by sshv
 Host vault
@@ -377,7 +377,7 @@ create_vaulthost_keys() {
     ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519_vaulthost -C "sshv temporary key" &>/dev/null <<< n # n means no to overwrite
     printf "\nOn the vault ssh host, add the following public key to /home/fwd/.ssh/authorized_keys:\n"
     printf "${RED}%s${NC}\n" "$(cat ~/.ssh/id_ed25519_vaulthost.pub)"
-    printf "NOTE: After this initial connection, sshv will use certificates, not keys, for authentication."
+    printf "NOTE: After this initial connection, sshv will use certificates, not keys, for authentication.\n"
     printf "The authorized_keys entry above will be deleted automatically.\n\n"
     read -er -p "Press Enter once added..."
   fi
