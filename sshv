@@ -262,7 +262,7 @@ uninstall_sshv() {
   if [[ -f /usr/local/bin/sshv ]]; then
     local tmp=mktemp
     sed '/# Added by sshv/,/# End of sshv/d' ~/.ssh/config > "${tmp}" && mv -f "${tmp}" ~/.ssh/config
-    sudo bash -c 'sed "/# Added by sshv/,/# End of sshv/d" /etc/ssh/ssh_known_hosts > tmpfile && mv tmpfile /etc/ssh/ssh_known_hosts'
+    sudo sed "/# Added by sshv/,/# End of sshv/d" /etc/ssh/ssh_known_hosts | tee "${tmp}" && sudo mv "${tmp}" /etc/ssh/ssh_known_hosts
     rm -rf ~/.sshv
     rm -f ~/.ssh/id_ed25519_vaulthost*
     sudo rm -f /usr/local/bin/sshv
