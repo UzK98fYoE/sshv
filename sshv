@@ -88,6 +88,7 @@ sshvd() {
     --mount source=sshv-etcssh,target=/etc/ssh \\
     -p 127.0.0.1:8080:8080 \\
     -p 127.0.0.1:8200:8200 \\
+    --user root \\
     --entrypoint bash \\
     fcienablementpublic/sshv:latest
 }
