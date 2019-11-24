@@ -57,8 +57,8 @@ install_container() {
 # if uninstalling
 if [[ \${1} == "-u" || \${1} == "--uninstall" ]]; then
   docker volume rm "sshv-$(whoami)" &>/dev/null
-  # docker volume rm "sshv-etcssh" &>/dev/null
-  # docker volume rm "sshv-usrlocalbin" &>/dev/null
+  docker volume rm "sshv-etcssh" &>/dev/null
+  docker volume rm "sshv-usrlocalbin" &>/dev/null
   sudo rm -f /usr/local/bin/sshv
   echo "sshv was succesfully uninstalled"
   exit 0
