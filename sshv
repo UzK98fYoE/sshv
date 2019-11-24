@@ -113,7 +113,6 @@ install_executable() {
 # is this a local or docker install?
 get_install_type() {
   install_type="container" # set default
-  local leave=0
 
   # leave if docker is not installed
   # NOTE: when installing the container version, we do an "exec /usr/local/bin/sshv", which starts the container, and now
@@ -131,7 +130,7 @@ get_install_type() {
 show_install_details() {
       echo
       echo " ####################################################### "
-      printf "       ${GREEN}Installation successful${NC}         \n "
+      printf "       ${GREEN}Installation successful${NC}         \n"
       echo " ####################################################### "
       echo
       echo " Installation details:                                   "
