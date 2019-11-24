@@ -260,8 +260,9 @@ uninstall_sshv() {
   # if local install
   if [[ -f /usr/local/bin/sshv ]]; then
     local tmp=mktemp
-    sed '/# Added by sshv/,/# End of sshv/d' ~/.ssh/config > "${tmp}" && mv -f "${tmp}" ~/.ssh/config
-    sudo sed "/# Added by sshv/,/# End of sshv/d" /etc/ssh/ssh_known_hosts | tee "${tmp}" && sudo mv "${tmp}" /etc/ssh/ssh_known_hosts
+    sed '/# Added by sshv/,/# End of sshv/d' ~/.ssh/config 2>/dev/null > "${tmp}" && mv -f "${tmp}" ~/.ssh/config
+    sudo sed "/# Added by sshv/,/# End of sshv/d" /etc/ssh/ssh_known_hosts 2>/dev/null \
+         | tee "${tmp}" && sudo mv "${tmp}" /etc/ssh/ssh_known_hosts
     rm -rf ~/.sshv
     rm -f ~/.ssh/id_ed25519_vaulthost*
     sudo rm -f /usr/local/bin/sshv
@@ -321,6 +322,9 @@ get_os() {
 req_jq() {
   if ! type jq &>/dev/null; then
     printf "Please install jq first:\n Mac: brew install jq coreutils gnu-getopt bash\n Ubuntu: sudo apt install jq\n RHEL: yum install epel-release -y && yum install jq -y\n"
+    printf "\n############################################################################################################\n"
+    printf "\n${RED} Mac users may need to completely close Terminal or iterm and re-open it after this installation${NC}\n"
+    printf "\n############################################################################################################\n\n"
     exit 1
   fi
 }
