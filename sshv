@@ -237,6 +237,11 @@ Description
   the resulting certificate, and calls ssh with arguments to use the certificate
   against the user@server you specify.
 
+DNS
+  To avoid using IP addresses, configure DNS. For example, on Mac, click the
+  Apple icon > System Preferences > Network > Wifi > Advanced > DNS > remove all
+    entries except your DNS server > add your search domain(s)
+
 Options:
   -h, --help          Display help
   -f, --portforward   Enable http://localhost:8080 and :8200. Exit with Ctrl+C
@@ -323,7 +328,7 @@ req_jq() {
   if ! type jq &>/dev/null; then
     printf "Please install jq first:\n Mac: brew install jq coreutils gnu-getopt bash\n Ubuntu: sudo apt install jq\n RHEL: yum install epel-release -y && yum install jq -y\n"
     printf "\n############################################################################################################\n"
-    printf "\n${RED} Mac users may need to completely close Terminal or iterm and re-open it after this installation${NC}\n"
+    printf "\n${RED} After installation, Mac users must open a new Terminal (or iterm) window, not just a tab! ${NC}\n"
     printf "\n############################################################################################################\n\n"
     exit 1
   fi
