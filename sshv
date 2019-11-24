@@ -53,10 +53,10 @@ seed_just_installed() {
          fcienablementpublic/sshv:latest -c 'chown -R sshv:sshv /home/sshv/.sshv; chmod -R 0770 /home/sshv/.sshv'
 
   # copy the seed file
-  docker cp just_installed helper:/home/sshv/.sshv >/dev/null
+  docker cp just_installed helper:/home/sshv/.sshv/just_installed >/dev/null
 
   # set permissions
-  docker restart helper
+  docker restart helper >/dev/null
   sleep 1 # give it time to complete
 
   # clean up
