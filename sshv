@@ -60,6 +60,7 @@ seed_just_installed() {
   sleep 1 # give it time to complete
 
   # clean up
+  docker stop helper >/dev/null
   docker rm helper >/dev/null
   rm -f just_installed
 }
@@ -77,9 +78,9 @@ install_container() {
 
 # if uninstalling
 if [[ \${1} == "-u" || \${1} == "--uninstall" ]]; then
-  docker volume rm "sshv-$(whoami)" &>/dev/null
-  docker volume rm "sshv-etcssh" &>/dev/null
-  docker volume rm "sshv-usrlocalbin" &>/dev/null
+  docker volume rm "sshv-$(whoami)" >/dev/null
+  docker volume rm "sshv-etcssh" >/dev/null
+  docker volume rm "sshv-usrlocalbin" >/dev/null
   sudo rm -f /usr/local/bin/sshv
   echo "sshv was succesfully uninstalled"
   exit 0
@@ -172,7 +173,7 @@ show_install_details() {
       echo
 }
 
-# Install the sshv alias if not installed
+# Install sshv if not installed
 install() {
   # if already installed (last step of install is creating ~/.ssh/config), return (if args present) or display help (if no args present)
   if grep -q "# Added by sshv" ~/.ssh/config 2>/dev/null; then
