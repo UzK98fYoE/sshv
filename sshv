@@ -95,6 +95,9 @@ sshvd() {
 EOF
   sudo chmod +x /usr/local/bin/sshv
 
+  # persist so a containerized install, which does exec below, can read it
+  tee ~/.sshv/just_installed &>/dev/null <<< "true"
+
   # you MUST now continue the install from INSIDE the container now, not outside!
   exec /usr/local/bin/sshv
 }
@@ -161,9 +164,6 @@ install() {
   get_vaulthost
   create_vaulthost_keys
   install_vault_ssh_config
-
-  # persist so containerized install, which does exec, can read it
-  tee ~/.sshv/just_installed &>/dev/null <<< "true"
 }
 
 # if running as a container, the (current) assumption is that ~/.sshv/ad_password exists
