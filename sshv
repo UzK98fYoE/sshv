@@ -72,6 +72,7 @@ docker run -it \\
   --rm \\
   --mount source=sshv-$(whoami),target=/home/sshv \\
   --mount source=sshv-etcssh,target=/etc/ssh \\
+  --mount source=sshv-usrlocalbin,target=/usr/local/bin \\
   -p 127.0.0.1:8080:8080 \\
   -p 127.0.0.1:8200:8200 \\
   fcienablementpublic/sshv:latest "\$@"
