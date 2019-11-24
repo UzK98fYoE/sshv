@@ -164,7 +164,8 @@ install() {
   create_vaulthost_keys
   install_vault_ssh_config
 
-  just_installed="true"
+  # persist so containerized install, which does exec, can read it
+  tee ~/.sshv/just_installed &>/dev/null <<< "true"
 }
 
 # if running as a container, the (current) assumption is that ~/.sshv/ad_password exists
@@ -626,7 +627,7 @@ get_cert() {
 # Run ssh command or give instructions to do that
 run_ssh() {
   # don't run ssh if just installed
-  [[ "${just_installed}" == "true" ]] && { show_install_details; return; }
+  [[ -f ~/.sshv/just_installed ]] && { rm -f ~/.sshv/just_installed; show_install_details; return; }
 
   if [[ -z "${args[*]+x}" ]]; then
     display_help
