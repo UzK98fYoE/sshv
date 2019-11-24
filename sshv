@@ -43,6 +43,25 @@ set_traps() {
   trap exit_on_signal_SIGTERM SIGTERM
 }
 
+# seed a file. although verbose, this approach lets you seed at runtime. alternatively, seed statically in the sshv dockerfile
+seed_just_installed() {
+  # create seed file
+  tee just_installed &>/dev/null <<< "true"
+
+  # create the volume
+  docker volume create "sshv-$(whoami)" >/dev/null
+
+  # copy the seed file
+  docker cp just_installed helper:/home/sshv/.sshv >/dev/null
+
+  # set permissions
+  docker run --rm --name helper --mount source="sshv-$(whoami)",target=/home/sshv --user root --entrypoint /bin/bash \
+         fcienablementpublic/sshv:latest -c 'chown -R sshv:sshv /home/sshv/.sshv; chmod -R 0770 /home/sshv/.sshv'
+
+  # clean up
+  rm -f just_installed
+}
+
 
 # install containerized sshv
 install_container() {
@@ -97,20 +116,16 @@ sshvd() {
 EOF
   sudo chmod +x /usr/local/bin/sshv
 
-  # seed the ~/.sshv create sshv dir for install
-  mkdir -p ~/.sshv
-  tee ~/.sshv/just_installed &>/dev/null <<< "true" # seed this file
-  docker run --name helper --mount source="sshv-$(whoami)",target=/home/sshv --entrypoint bash fcienablementpublic/sshv:latest
-  docker cp ~/.sshv helper:/home/sshv/.sshv
-  docker rm helper
-  rm -rfv ~/.sshv
+  # seed / persist a file so the container can act on it
+  seed_just_installed
 
-  # you MUST now continue the install from INSIDE the container now, not outside!
+  # logically, you MUST now continue the install from INSIDE the container now, not outside!
   exec /usr/local/bin/sshv
 }
 
 # install sshv locally
 install_local() {
+ create_sshv_config_dir
  sudo curl -sSL http://bit.ly/2neL2vI -o /usr/local/bin/sshv # download latest version first
  sudo chmod +x /usr/local/bin/sshv
 }
@@ -157,9 +172,6 @@ show_install_details() {
 
 # Install the sshv alias if not installed
 install() {
-  # return if running in a container
-  # [[ "${is_container}" == "true" ]] && return
-
   # if already installed (last step of install is creating ~/.ssh/config), return (if args present) or display help (if no args present)
   if grep -q "# Added by sshv" ~/.ssh/config 2>/dev/null; then
     [[ ${#args[@]} -eq 0 ]] && display_help || return
