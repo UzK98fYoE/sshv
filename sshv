@@ -49,16 +49,18 @@ seed_just_installed() {
   tee just_installed &>/dev/null <<< "true"
 
   # create the volume
-  docker volume create "sshv-$(whoami)" >/dev/null
+  docker run --name helper --mount source="sshv-$(whoami)",target=/home/sshv --user root --entrypoint /bin/bash \
+         fcienablementpublic/sshv:latest -c 'chown -R sshv:sshv /home/sshv/.sshv; chmod -R 0770 /home/sshv/.sshv'
 
   # copy the seed file
   docker cp just_installed helper:/home/sshv/.sshv >/dev/null
 
   # set permissions
-  docker run --rm --name helper --mount source="sshv-$(whoami)",target=/home/sshv --user root --entrypoint /bin/bash \
-         fcienablementpublic/sshv:latest -c 'chown -R sshv:sshv /home/sshv/.sshv; chmod -R 0770 /home/sshv/.sshv'
+  docker restart helper
+  sleep 1 # give it time to complete
 
   # clean up
+  docker rm helper >/dev/null
   rm -f just_installed
 }
 
