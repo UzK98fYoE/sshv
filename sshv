@@ -134,7 +134,13 @@ update_sshv() {
 # install sshv locally
 install_local() {
   mkdir -p ~/.sshv
-  sudo curl -sSL http://bit.ly/2neL2vI -o /usr/local/bin/sshv # download latest version first
+
+  # download latest version
+  if sudo curl -sSL http://bit.ly/2neL2vI -o /usr/local/bin/sshv; then
+    echo "Succesfully downloaded the latest version of sshv."
+  else
+    echo "Could not download the latest version of sshv. Using the existing version instead."
+  fi
   sudo chmod 0775 /usr/local/bin/sshv
 }
 
