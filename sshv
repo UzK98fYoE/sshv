@@ -296,6 +296,7 @@ port_forward() {
   # see ~/.ssh/config
  printf "\nPort forwarding enabled. Options:\n  1. open vault: http://localhost:8200\n  2. open jenkins: http://localhost:8080\n  3. quit: ctrl+c\n\n"
  ssh -NT vault
+ exit 0
 }
 
 # remove sshv
