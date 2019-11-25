@@ -76,13 +76,13 @@ install_container() {
 #!/bin/bash
 # containerized sshv
 
-# if uninstalling
-if [[ \${1} == "-u" || \${1} == "--uninstall" ]]; then
+# if removing
+if [[ \${1} == "-r" || \${1} == "--remove" ]]; then
   docker volume rm "sshv-$(whoami)" >/dev/null
   docker volume rm "sshv-etcssh" >/dev/null
   docker volume rm "sshv-usrlocalbin" >/dev/null
   sudo rm -f /usr/local/bin/sshv
-  echo "sshv was succesfully uninstalled"
+  echo "sshv was succesfully removed"
   exit 0
 fi
 
@@ -117,7 +117,7 @@ sshvd() {
     fcienablementpublic/sshv:latest
 }
 EOF
-  sudo chmod +x /usr/local/bin/sshv
+  sudo chmod 0775 /usr/local/bin/sshv
 
   # seed / persist a file so the container can act on it
   seed_just_installed
@@ -126,11 +126,16 @@ EOF
   exec /usr/local/bin/sshv
 }
 
+# update sshv
+update_sshv() {
+  install_local
+}
+
 # install sshv locally
 install_local() {
- create_sshv_config_dir
- sudo curl -sSL http://bit.ly/2neL2vI -o /usr/local/bin/sshv # download latest version first
- sudo chmod +x /usr/local/bin/sshv
+  mkdir -p ~/.sshv
+  sudo curl -sSL http://bit.ly/2neL2vI -o /usr/local/bin/sshv # download latest version first
+  sudo chmod 0775 /usr/local/bin/sshv
 }
 
 # if not running in a container, which is already /usr/local/bin/sshv, then create that executable
@@ -148,7 +153,7 @@ get_install_type() {
   if ! type docker &>/dev/null; then install_type="local"; return; fi
 
   # since docker is (presumably) installed, ask to install as a container
-  read -er -p "How should I install sshv? Locally or as a container? " -i "${install_type}" install_type
+  read -er -p "How should I install sshv? local or container? " -i "${install_type}" install_type
 
   # can this user run the docker command?
   if ! docker 2>/dev/null; then echo "Error running docker. Try: usermod -a -G docker $(whoami), and re-open this terminal."; exit 1; fi
@@ -186,6 +191,9 @@ install() {
   get_vaulthost
   create_vaulthost_keys
   install_vault_ssh_config
+
+  # remember that we were just installed
+  tee ~/.sshv/just_installed >/dev/null <<< "true"
 }
 
 # if running as a container, the (current) assumption is that ~/.sshv/ad_password exists
@@ -265,10 +273,11 @@ DNS
     entries except your DNS server > add your search domain(s)
 
 Options:
-  -h, --help          Display help
   -f, --portforward   Enable http://localhost:8080 and :8200. Exit with Ctrl+C
+  -h, --help          Display help
+  -r, --remove        Remove sshv
   -s, --search        Search vcsa inventory. Example: sshv -s js1
-  -u, --uninstall     Uninstall sshv
+  -u, --update        Update sshv
   --                  Send everything after 2 dashes as arguments to ssh, not sshv
 
 EOF
@@ -282,8 +291,8 @@ port_forward() {
  ssh -NT vault
 }
 
-# uninstall sshv
-uninstall_sshv() {
+# remove sshv
+remove_sshv() {
   # if local install
   if [[ -f /usr/local/bin/sshv ]]; then
     local tmp=mktemp
@@ -294,7 +303,7 @@ uninstall_sshv() {
     rm -f ~/.ssh/id_ed25519_vaulthost*
     sudo rm -f /usr/local/bin/sshv
 
-    echo "sshv succesfully uninstalled"
+    echo "sshv succesfully removed"
     exit 0
   else
     echo "sshv is not installed"
@@ -318,14 +327,15 @@ search_inventory() {
 
 # get options: https://gist.github.com/cosimo/3760587
 get_options() {
-  if ! OPTS=$(getopt -o hfus: --long help,portforward,uninstall,search -n 'parse-options' -- "$@"); then display_help; exit; fi
+  if ! OPTS=$(getopt -o hfrus: --long help,portforward,update,remove,search -n 'parse-options' -- "$@"); then display_help; exit; fi
   eval set -- "$OPTS"
 
   while true; do
     case "$1" in
              -h|--help)  display_help ; shift ;;
              -f|--portforward)  port_forward ; shift ;;
-             -u|--uninstall)  uninstall_sshv ; shift ;;
+             -r|--remove)  remove_sshv ; shift ;;
+             -u|--update)  update_sshv ; shift ;;
              -s|--search)     search_inventory "${2}"; shift ;;
              --)  shift ; args=(); until [[ -z ${1+x} ]]; do args+=("$1"); shift; done; break ;;
                      *)  echo "Internal error!" ; display_help; exit 1 ;;
@@ -348,7 +358,7 @@ get_os() {
 # Require this
 req_jq() {
   if ! type jq &>/dev/null; then
-    printf "Please install jq first:\n Mac: brew install jq coreutils gnu-getopt bash\n Ubuntu: sudo apt install jq\n RHEL: yum install epel-release -y && yum install jq -y\n"
+    printf "Please install jq first:\n Mac: brew install jq coreutils gnu-getopt bash\n Ubuntu: sudo apt install jq\n RHEL: yum install epel-release -y && sudo yum install jq -y\n"
     printf "\n############################################################################################################\n"
     printf "\n${RED} After installation, Mac users must open a new Terminal (or iterm) window, not just a tab! ${NC}\n"
     printf "\n############################################################################################################\n\n"
@@ -436,11 +446,6 @@ check_network() {
       printf "\n${RED}Error${NC}: curl -sS --request GET http://localhost:%s/v1/auth/token/lookup did ${RED}NOT${NC} return the expected \"missing client token\". Is vault running?\n\n" "${VAULT_PORT}"
       exit 1
   fi
-}
-
-# Create sshv_config_dir
-create_sshv_config_dir() {
-  mkdir -p ~/.sshv
 }
 
 # Validate an existing token, if it exists
