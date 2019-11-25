@@ -220,13 +220,13 @@ install_vault_ssh_config() {
   # port forwarding option requires container to listen on all ipv4 interfaces
   if [[ "${is_container}" == "true" ]]; then interface="0.0.0.0"; else interface="127.0.0.1"; fi
 
-  comment="# Added by sshv"
   path="$HOME/.ssh/config"
 
   # if not already there, add this entry
   if ! grep -q -F "# Added by sshv" "${path}" 2>/dev/null; then
     tee -a "${path}" >/dev/null <<EOF
 # Added by sshv
+# ---config start---
 Host vault
    HostName ${VAULT_SSH_HOSTNAME}
    ServerAliveInterval 3
@@ -235,7 +235,10 @@ Host vault
    User fwd
    LocalForward ${interface}:8200 127.0.0.1:8200
    LocalForward ${interface}:8080 127.0.0.1:8080
-# End of sshv changes
+# ---config end---
+# ---hosts begin---
+# ---hosts end---
+# End of sshv
 EOF
   [[ $? -eq 0 ]] || print "Error: could not update your ${path}\n"
 fi
@@ -273,11 +276,6 @@ Description
   the resulting certificate, and calls ssh with arguments to use the certificate
   against the user@server you specify.
 
-DNS
-  To avoid using IP addresses, configure DNS. For example, on Mac, click the
-  Apple icon > System Preferences > Network > Wifi > Advanced > DNS > remove all
-    entries except your DNS server > add your search domain(s)
-
 Options:
   -d, --debug         Debug mode for sshv (i.e., enable bash's set -x)
   -f, --portforward   Enable http://localhost:8080 and :8200. Exit with Ctrl+C
@@ -304,7 +302,7 @@ remove_sshv() {
   # if local install
   if [[ -f /usr/local/bin/sshv ]]; then
     local tmp=mktemp
-    sed '/# Added by sshv/,/# End of sshv/d' ~/.ssh/config 2>/dev/null > "${tmp}" && mv -f "${tmp}" ~/.ssh/config
+    sed '/# Added by sshv/,/# End of sshv/d' ~/.ssh/config >/dev/null > "${tmp}" && mv -f "${tmp}" ~/.ssh/config
     sudo sed "/# Added by sshv/,/# End of sshv/d" /etc/ssh/ssh_known_hosts 2>/dev/null \
          | tee "${tmp}" && sudo mv "${tmp}" /etc/ssh/ssh_known_hosts
     rm -rf ~/.sshv
@@ -323,12 +321,13 @@ remove_sshv() {
 # get inventory from vcsa
 # $1 = the search pattern (e.g., foo or 111)
 search_inventory() {
+  local tmp="$(mktemp)"
   pushd ~/.sshv &>/dev/null || { echo "could not pushd ~/.sshv"; exit; }
   scp -q vault:vcsa-inventory .
-  jq -e '..| {name: .name?, state: ."guest.guestState"?, hostname: ."guest.hostName"?, ip: ."guest.ipAddress"?} | select(.state)' vcsa-inventory > tmpjq
-  jq -er "select((.name | try contains(\"${1}\")) or (.hostname | try contains(\"${1}\")) or (.ip | try contains(\"${1}\")) or (.state | try contains(\"${1}\")))|[.ip,.hostname,.name,.state]|@csv" tmpjq | tr -d \" | tr , ' ' | column -t
+  jq -e '..| {name: .name?, state: ."guest.guestState"?, hostname: ."guest.hostName"?, ip: ."guest.ipAddress"?} | select(.state)' vcsa-inventory > "${tmp}"
+  jq -er "select((.name | try contains(\"${1}\")) or (.hostname | try contains(\"${1}\")) or (.ip | try contains(\"${1}\")) or (.state | try contains(\"${1}\")))|[.ip,.hostname,.name,.state]|@csv" "${tmp}" | tr -d \" | tr , ' ' | column -t
 
-  rm vcsa-inventory tmpjq
+  rm vcsa-inventory "${tmp}"
   popd &>/dev/null || { echo "could not popd ~/.sshv"; exit; }
   exit 0
 }
@@ -585,7 +584,7 @@ trust_hosts_ca() {
 
   # otherwise, continue
   comment1="# Added by sshv"
-  comment2="# End of sshv changes"
+  comment2="# End of sshv"
   sudo tee "${path}" >/dev/null <<EOF
 ${comment1}
 ${command1}
@@ -635,6 +634,43 @@ tee csr.json >/dev/null <<-EOF
 	"cert_type"        :  "user"
 	}
 EOF
+}
+
+
+# update ssh_config with latest inventory
+update_ssh_config() {
+  local tmp="$(mktemp)"
+  pushd ~/.sshv &>/dev/null || { echo "could not pushd ~/.sshv"; exit; }
+  scp -q vault:vcsa-inventory . # download inventory
+  IFS_ORIG="${IFS}" # back up
+  IFS=','
+
+  # download inventory
+  scp -q vault:vcsa-inventory .
+
+  # create csv
+  jq -er '..| {name: .name?, state: .guest.guestState?, hostname: ."guest.hostName"?, ip: ."guest.ipAddress"?} | select(.ip) | [.name,.hostname,.ip]|@csv' ~/.sshv/vcsa-inventory > csv
+  [[ -f csv ]] || echo 'Error: could not create the csv file from the inventory'
+
+  # parse csv and create config fragment
+  while read -r short long ip; do printf "Host %s %s\n  HostName %s\n" "$short" "$long" "$ip"; done < csv > hosts
+  [[ -f hosts ]] || echo 'Error: could not create the hosts fragment for ~/.ssh/config'
+
+  # Delete previous entries (i.e., stuff between these delimiters)
+  sed '/# ---hosts begin---/,/# ---hosts end---/{//!d;}' ~/.ssh/config >/dev/null > "${tmp}" && mv -f "${tmp}" ~/.ssh/config
+
+  # if no backup, make one
+  if ! ls ~/.ssh/config-*.bkp &>/dev/null; then cp ~/.ssh/config{,"-$(date '+%Y%m%d-%H%M%S')".bkp}; fi
+
+  # add entries
+  CURRENT="$(<~/.ssh/config)"
+  ADDITIONS="$(<hosts)"
+  echo "${CURRENT/'# ---hosts end---'/${ADDITIONS}$'\n'# ---hosts end---}" > ~/.ssh/config # ignore this: '}"
+
+  # clean up
+  rm -f csv hosts
+  IFS="${IFS_ORIG}" # restore
+  popd &>/dev/null || { echo "could not popd ~/.sshv"; exit; }
 }
 
 # delete file
@@ -715,6 +751,7 @@ main() {
   create_keypair
   set_csr_parms
   get_cert
+  update_ssh_config
   run_ssh
   delete_tunnel
 }
