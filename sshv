@@ -78,9 +78,9 @@ install_container() {
 
 # if removing
 if [[ \${1} == "-r" || \${1} == "--remove" ]]; then
-  docker volume rm "sshv-$(whoami)" >/dev/null
-  docker volume rm "sshv-etcssh" >/dev/null
-  docker volume rm "sshv-usrlocalbin" >/dev/null
+  docker volume rm -f "sshv-$(whoami)" >/dev/null
+  docker volume rm -f "sshv-etcssh" >/dev/null
+  docker volume rm -f "sshv-usrlocalbin" >/dev/null
   sudo rm -f /usr/local/bin/sshv
   echo "sshv was succesfully removed"
   exit 0
@@ -243,7 +243,7 @@ fi
 
 # create an ssh tunnel to vault. The tunnel authenticates and secures traffic
 create_tunnel() {
-  if ! ssh -NfT vault &>/dev/null; then
+  if ! ssh -vvv -NfT vault &>~/.sshv/create-tunnel.log; then
     printf "\nError: could not create ssh tunnel. Tips:\n"
     printf "  1. Add your public key to /home/fwd/.ssh/authorized_keys on the vault server (e.g., via a Jenkins job).\n"
     printf "  2. Set permissions on the vault server with chmod 0600 /home/fwd/.ssh/authorized_keys\n"
