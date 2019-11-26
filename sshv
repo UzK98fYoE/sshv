@@ -227,7 +227,7 @@ install_vault_ssh_config() {
   if ! grep -q -F "# Added by sshv" "${path}" 2>/dev/null; then
     tee -a "${path}" >/dev/null <<EOF
 # Added by sshv
-# ---config start---
+# ---config begin---
 Host vault
    HostName ${VAULT_SSH_HOSTNAME}
    ServerAliveInterval 3
@@ -488,7 +488,7 @@ check_token() {
 
 # Get AD username
 get_ad_username() {
-  read -er -p "Enter your Active Directory (AD) username: " -i "${ad_username}" ad_username
+  read -er -p "Enter your Active Directory (AD) username (just foo, not foo@bar.com): " -i "${ad_username}" ad_username
 
   # ensure that it's not empty
   [[ -z ${ad_username:+x} ]] && { printf "\nError: no username\n"; exit 1; }
