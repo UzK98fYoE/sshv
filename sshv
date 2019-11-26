@@ -326,6 +326,7 @@ search_inventory() {
 
   local tmp="$(mktemp)"
 
+  # use grep for case-insensitive searches instead of jq's contain or ascii-downcase
   jq -er '..| {name: .name?, state: ."guest.guestState"?, hostname: ."guest.hostName"?, ip: ."guest.ipAddress"?}
           | select(.state)|[.ip,.hostname,.name,.state]|@csv' \
          ~/.sshv/vcsa-inventory |\
