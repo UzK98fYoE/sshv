@@ -321,20 +321,21 @@ remove_sshv() {
 # get inventory from vcsa
 # $1 = the search pattern (e.g., foo or 111)
 search_inventory() {
+  get_inventory_refresh
+  [[ $inventory_refresh -eq 1 ]] && scp -q vault:vcsa-inventory ~/.sshv/
+
   local tmp="$(mktemp)"
-  pushd ~/.sshv &>/dev/null || { echo "could not pushd ~/.sshv"; exit; }
-  scp -q vault:vcsa-inventory .
-  jq -e '..| {name: .name?, state: ."guest.guestState"?, hostname: ."guest.hostName"?, ip: ."guest.ipAddress"?} | select(.state)' vcsa-inventory > "${tmp}"
+
+  jq -e '..| {name: .name?, state: ."guest.guestState"?, hostname: ."guest.hostName"?, ip: ."guest.ipAddress"?} | select(.state)' ~/.sshv/vcsa-inventory > "${tmp}"
   jq -er "select((.name | try contains(\"${1}\")) or (.hostname | try contains(\"${1}\")) or (.ip | try contains(\"${1}\")) or (.state | try contains(\"${1}\")))|[.ip,.hostname,.name,.state]|@csv" "${tmp}" | tr -d \" | tr , ' ' | column -t
 
   rm "${tmp}"
-  popd &>/dev/null || { echo "could not popd ~/.sshv"; exit; }
   exit 0
 }
 
 # get options: https://gist.github.com/cosimo/3760587
 get_options() {
-  if ! OPTS=$(getopt -o hfruds: --long help,portforward,update,remove,debug,search -n 'parse-options' -- "$@"); then display_help; exit; fi
+  if ! OPTS=$(getopt -o hfruds: --long help,portforward,update,remove,debug,search: -n 'parse-options' -- "$@"); then display_help; exit; fi
   eval set -- "$OPTS"
 
   while true; do
@@ -647,14 +648,18 @@ tee csr.json >/dev/null <<-EOF
 EOF
 }
 
-
+# if the inventory is recent, remember that
+get_inventory_refresh() {
+  inventory_refresh=0
+  if [[ -f ~/.sshv/vcsa-inventory ]]; then
+    count=$(( $(find ~/.sshv -name vcsa-inventory -mmin +720 | wc -l) ))
+    [[ $count -gt 0 ]] && inventory_refresh=1
+  fi
+}
 # update ssh_config with latest inventory
 update_ssh_config() {
-  # return if the inventory exists but is less than 12 hours old
-  if [[ -f ~/.sshv/vcsa-inventory ]]; then
-    count=$(( $(find ~/.sshv -name vcsa-inventory -mmin -720 | wc -l) ))
-    if [[ $count -gt 0 ]]; then return; fi
-  fi
+  get_inventory_refresh
+  [[ $inventory_refresh -eq 0 ]] && return
 
   local tmp="$(mktemp)"
   pushd ~/.sshv &>/dev/null || { echo "could not pushd ~/.sshv"; exit; }
