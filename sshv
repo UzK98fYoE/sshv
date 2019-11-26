@@ -136,7 +136,7 @@ install_local() {
   mkdir -p ~/.sshv
 
   # download latest version
-  if sudo curl -sSL http://bit.ly/2neL2vI -o /usr/local/bin/sshv; then
+  if sudo timeout 7 curl -sSL http://bit.ly/2neL2vI -o /usr/local/bin/sshv; then
     echo "Succesfully downloaded the latest version of sshv."
   else
     echo "Could not download the latest version of sshv. Using the existing version instead."
