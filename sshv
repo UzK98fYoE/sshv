@@ -326,8 +326,11 @@ search_inventory() {
 
   local tmp="$(mktemp)"
 
-  jq -e '..| {name: .name?, state: ."guest.guestState"?, hostname: ."guest.hostName"?, ip: ."guest.ipAddress"?} | select(.state)' ~/.sshv/vcsa-inventory > "${tmp}"
-  jq -er "select((.name | try contains(\"${1}\")) or (.hostname | try contains(\"${1}\")) or (.ip | try contains(\"${1}\")) or (.state | try contains(\"${1}\")))|[.ip,.hostname,.name,.state]|@csv" "${tmp}" | tr -d \" | tr , ' ' | column -t
+  jq -er '..| {name: .name?, state: ."guest.guestState"?, hostname: ."guest.hostName"?, ip: ."guest.ipAddress"?}
+          | select(.state)|[.ip,.hostname,.name,.state]|@csv' \
+         ~/.sshv/vcsa-inventory |\
+         tr -d \" | tr , ' ' | column -t |\
+         grep -i "${1}"
 
   rm "${tmp}"
   exit 0
