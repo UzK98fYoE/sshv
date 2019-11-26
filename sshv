@@ -327,7 +327,7 @@ search_inventory() {
   jq -e '..| {name: .name?, state: ."guest.guestState"?, hostname: ."guest.hostName"?, ip: ."guest.ipAddress"?} | select(.state)' vcsa-inventory > "${tmp}"
   jq -er "select((.name | try contains(\"${1}\")) or (.hostname | try contains(\"${1}\")) or (.ip | try contains(\"${1}\")) or (.state | try contains(\"${1}\")))|[.ip,.hostname,.name,.state]|@csv" "${tmp}" | tr -d \" | tr , ' ' | column -t
 
-  rm vcsa-inventory "${tmp}"
+  rm "${tmp}"
   popd &>/dev/null || { echo "could not popd ~/.sshv"; exit; }
   exit 0
 }
@@ -596,11 +596,22 @@ EOF
   sudo chmod 770 /etc/ssh/ssh_known_hosts
 }
 
-# renew this client's certificate for the ssh host running vault
-renew_my_cert() {
-  # Renew for another 6 months
+
+# get or renew sshv's client cert to ssh host running vault
+get_my_cert() {
   set_csr_parms "262800m" "fwd" ~/.ssh/id_ed25519_vaulthost.pub
   get_cert ~/.ssh/id_ed25519_vaulthost-cert.pub
+}
+
+# renew this sshv client's certificate to the ssh host running vault
+check_my_age() {
+  # renew if older than 150 days (5 months)
+  if [[ -f ~/.ssh/id_ed25519_vaulthost-cert.pub ]]; then
+    count=$(( $(find ~/.ssh -name id_ed25519_vaulthost-cert.pub -mtime +150 | wc -l) ))
+    if [[ $count -gt 0 ]]; then get_my_cert; fi
+  else # file not found
+    get_my_cert # get cert
+  fi
 }
 
 # Create a temporary, i.e., worthless after its certificate expires, ssh keypair for this user
@@ -639,6 +650,12 @@ EOF
 
 # update ssh_config with latest inventory
 update_ssh_config() {
+  # return if the inventory exists but is less than 12 hours old
+  if [[ -f ~/.sshv/vcsa-inventory ]]; then
+    count=$(( $(find ~/.sshv -name vcsa-inventory -mmin -720 | wc -l) ))
+    if [[ $count -gt 0 ]]; then return; fi
+  fi
+
   local tmp="$(mktemp)"
   pushd ~/.sshv &>/dev/null || { echo "could not pushd ~/.sshv"; exit; }
   scp -q vault:vcsa-inventory . # download inventory
@@ -681,6 +698,7 @@ delete_file() {
 }
 
 # Get certificate from Vault (CA)
+# $1 = the certificate you want
 get_cert() {
   local cert="${1:-$HOME/.ssh/id_rsa_vault-cert.pub}"
 
@@ -747,7 +765,7 @@ main() {
   check_network
   authenticate_to_vault
   trust_hosts_ca
-  renew_my_cert
+  check_my_age
   create_keypair
   set_csr_parms
   get_cert
