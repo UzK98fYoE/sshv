@@ -128,6 +128,7 @@ EOF
 
 # update sshv
 update_sshv() {
+  do_update_hosts_ca_key=1
   install_local
 }
 
@@ -282,7 +283,7 @@ Options:
   -h, --help          Display help
   -r, --remove        Remove sshv
   -s, --search        Search vcsa inventory. Example: sshv -s js1
-  -u, --update        Update sshv
+  -u, --update        Update sshv and download the latest hosts_ca certificate.
   --                  Send everything after 2 dashes as arguments to ssh, not sshv
 
 EOF
@@ -578,9 +579,15 @@ authenticate_to_vault() {
   fi
 }
 
+# persist to disk
+get_hosts_ca_key() {
+  timeout 7 curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request GET "$VAULT_ADDR/v1/hosts-ca/public_key" > ~/.sshv/hosts_ca.pub
+}
+
 # trust the hosts ca (avoids the "The authenticity of host foo (IP) can't be established")
 trust_hosts_ca() {
-  curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request GET "$VAULT_ADDR/v1/hosts-ca/public_key" > ~/.sshv/hosts_ca.pub
+  [[ ! -f ~/.sshv/hosts_ca.pub || $do_update_hosts_ca_key -eq 1 ]] && get_hosts_ca_key
+
   path=/etc/ssh/ssh_known_hosts
   command1="@cert-authority * $(cat ~/.sshv/hosts_ca.pub)"
 
