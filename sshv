@@ -331,7 +331,7 @@ search_inventory() {
           | select(.state)|[.ip,.hostname,.name,.state]|@csv' \
          ~/.sshv/vcsa-inventory |\
          tr -d \" | tr , ' ' | column -t |\
-         grep -i "${1}"
+         grep -i --color=auto "${1}"
 
   rm "${tmp}"
   exit 0
