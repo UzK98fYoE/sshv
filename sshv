@@ -744,7 +744,7 @@ run_ssh() {
 # delete the ssh tunnel created earlier to avoid port conflicts on 8200
 delete_tunnel() {
   # build an array of all PIDs doing ssh to vault. E.g., 123 456 789
-  tunnel_pids=("$(ps ax | awk '/[s]sh -NfT vault/{print $1}' | tr '\n' ' ')")
+  tunnel_pids=("$(ps ax | awk '/[s]sh -vvv -NfT vault/{print $1}' | tr '\n' ' ')")
 
   # kill them all
   if [[ ! "${tunnel_pids[*]}" == "" ]]; then
