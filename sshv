@@ -654,6 +654,8 @@ get_inventory_refresh() {
   if [[ -f ~/.sshv/vcsa-inventory ]]; then
     count=$(( $(find ~/.sshv -name vcsa-inventory -mmin +720 | wc -l) ))
     [[ $count -gt 0 ]] && inventory_refresh=1
+  else # file doesn't exist
+    inventory_refresh=1
   fi
 }
 # update ssh_config with latest inventory
