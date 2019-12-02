@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # ssh to hosts via certificates using hashicorp vault as the Certificate Authority (CA)
 #
