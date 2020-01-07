@@ -243,6 +243,7 @@ Host vault
 EOF
   [[ $? -eq 0 ]] || print "Error: could not update your ${path}\n"
 fi
+  chmod 0700 "${path}"
 }
 
 # create an ssh tunnel to vault. The tunnel authenticates and secures traffic
