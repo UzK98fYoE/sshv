@@ -652,7 +652,7 @@ tee csr.json >/dev/null <<-EOF
 	"ttl"              :  "${ttl}",
 	"valid_principals" :  "${principals}",
 	"cert_type"        :  "user",
-	"key_id"           :  "sshv: FROM ${ad_username} AT $(hostname -f)$(ifconfig | awk '/inet 9./{print $2}' | head -n 1) TO ${args[@]} ON $(date -u --rfc-3339=seconds).",
+	"key_id"           :  "sshv: FROM ${ad_username} AT $(hostname -f)$(ifconfig | awk '/inet 9./{print $2}' | head -n 1) TO ${args[@]} ON $(date -u --rfc-3339=seconds)",
 	"critical_options" :  {},
 	"extension"        :  { "permit-pty":"", "permit-port-forwarding": "" },
 	"cert_type"        :  "user"
