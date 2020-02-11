@@ -652,7 +652,7 @@ tee csr.json >/dev/null <<-EOF
 	"ttl"              :  "${ttl}",
 	"valid_principals" :  "${principals}",
 	"cert_type"        :  "user",
-	"key_id"           :  "${ad_username} from $(hostname -f) $(ifconfig | awk '/inet 9./{print $2}' | head -n 1) on $(date). created by vault via sshv",
+	"key_id"           :  "sshv: FROM ${ad_username} AT $(hostname -f)$(ifconfig | awk '/inet 9./{print $2}' | head -n 1) TO ${args[@]} ON $(date).",
 	"critical_options" :  {},
 	"extension"        :  { "permit-pty":"", "permit-port-forwarding": "" },
 	"cert_type"        :  "user"
