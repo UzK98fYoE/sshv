@@ -243,7 +243,6 @@ Host vault
 EOF
   [[ $? -eq 0 ]] || print "Error: could not update your ${path}\n"
 fi
-  chmod 0700 "${path}"
 }
 
 # create an ssh tunnel to vault. The tunnel authenticates and secures traffic
@@ -465,7 +464,7 @@ check_network() {
 
 # Validate an existing token, if it exists
 check_token() {
-  resfile="checktoken.txt"           # file to hold curl results temporarily
+  local resfile="${HOME}/.sshv/checktoken.txt"           # file to hold curl results temporarily
 
   # if the token exists, check if token is valid
   if [[ -f ~/.sshv/token ]]; then
@@ -526,7 +525,7 @@ get_creds() {
 
 # Send credentials to vault
 send_creds() {
-  resfile="curl_sig_req_results.txt" # file to hold curl results temporarily
+  local resfile="${HOME}/.sshv/curl_sig_req_results.txt" # file to hold curl results temporarily
 
   # try to log in
   curl -sS --request POST --data @"${creds_filepath}" "$VAULT_ADDR/v1/auth/ldap/login/$ad_username" -o "${resfile}"
@@ -645,8 +644,9 @@ set_csr_parms() {
 local ttl=${1:-15s} # if not provided, default ttl to 15 seconds
 local principals="${2:-$ad_username},fssops"
 local pubkey=${3:-~/.ssh/id_rsa_vault.pub} # if not provided, default to this path
+local csrfile="${HOME}/.sshv/csr.json"
 
-tee csr.json >/dev/null <<-EOF
+tee "${csrfile}" >/dev/null <<-EOF
 	{
 	"public_key"       :  "$(tr '\n' '*' <${pubkey} | sed 's/\*/\\n/g')",
 	"ttl"              :  "${ttl}",
@@ -721,13 +721,14 @@ delete_file() {
 get_cert() {
   local cert="${1:-$HOME/.ssh/id_rsa_vault-cert.pub}"
 
-  resfile="curl_sig_req_results.txt" # file to hold curl results temporarily
+  local resfile="${HOME}/.sshv/curl_sig_req_results.txt" # file to hold curl results temporarily
+  local csrfile="${HOME}/.sshv/csr.json"
 
   curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request POST \
-  --data @csr.json "${VAULT_ADDR}/v1/users-ca/sign/role1" -o "${resfile}"
+       --data @"${csrfile}" "${VAULT_ADDR}/v1/users-ca/sign/role1" -o "${resfile}"
 
   # debugging
-  # cat csr.json
+  # cat "${csrfile}"
   # cat $resfile
 
   # Check for failure. Example: {"errors":["1 error occurred:\n\t* permission denied\n"]}
@@ -742,7 +743,7 @@ get_cert() {
 
   jq -er ".data.signed_key" < "${resfile}" >"${cert}"
   delete_file "${resfile}"
-  delete_file "csr.json"
+  delete_file "${csrfile}"
 }
 
 # Run ssh command or give instructions to do that
