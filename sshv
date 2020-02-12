@@ -130,6 +130,7 @@ EOF
 update_sshv() {
   do_update_hosts_ca_key=1
   install_local
+  update_ssh_config
 }
 
 # install sshv locally
@@ -283,7 +284,7 @@ Options:
   -h, --help          Display help
   -r, --remove        Remove sshv
   -s, --search        Search vcsa inventory. Example: sshv -s js1
-  -u, --update        Update sshv and download the latest hosts_ca certificate.
+  -u, --update        Update sshv, the latest hosts_ca cert, and latest inventory
   --                  Send everything after 2 dashes as arguments to ssh, not sshv
 
 EOF
@@ -323,7 +324,10 @@ remove_sshv() {
 # $1 = the search pattern (e.g., foo or 111)
 search_inventory() {
   get_inventory_refresh
-  [[ $inventory_refresh -eq 1 ]] && scp -q vault:vcsa-inventory ~/.sshv/
+  if [[ $inventory_refresh -eq 1 ]]; then
+    scp -q vault:vcsa-inventory ~/.sshv/
+    update_ssh_config
+  fi
 
   local tmp="$(mktemp)"
 
@@ -670,11 +674,9 @@ get_inventory_refresh() {
     inventory_refresh=1
   fi
 }
+
 # update ssh_config with latest inventory
 update_ssh_config() {
-  get_inventory_refresh
-  [[ $inventory_refresh -eq 0 ]] && return
-
   local tmp="$(mktemp)"
   pushd ~/.sshv &>/dev/null || { echo "could not pushd ~/.sshv"; exit; }
   scp -q vault:vcsa-inventory . # download inventory
@@ -789,7 +791,6 @@ main() {
   create_keypair
   set_csr_parms
   get_cert
-  update_ssh_config
   run_ssh
   delete_tunnel
 }
