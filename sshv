@@ -152,7 +152,7 @@ install_executable() {
 
 # is this a local or docker install?
 get_install_type() {
-  install_type="container" # set default
+  install_type="local" # set default
 
   # leave if docker is not installed
   # NOTE: when installing the container version, we do an "exec /usr/local/bin/sshv", which starts the container, and now
