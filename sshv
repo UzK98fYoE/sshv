@@ -703,7 +703,7 @@ EOF
          < ~/.sshv/inventory \
          | tr -d \" \
          > ~/.sshv/inventory.csv
-  [[ -f ~/.sshv/csv ]] || echo 'Error: could not create the csv file from the inventory'
+  [[ -f ~/.sshv/inventory.csv ]] || echo 'Error: could not create the csv file from the inventory'
 }
 
 # update ssh_config with latest inventory
