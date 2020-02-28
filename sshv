@@ -685,7 +685,6 @@ create_csv() {
 # |[   = reformat as an array
 # @csv = filter output as csv
 
-tee ~/.sshv/filter 2>/dev/null <<\EOF
 ._meta.hostvars[] |
   {
    name:    ( ."guest.hostName"? // .fullyQualifiedDomainName? // .name? + ".regtech.cloud.ibm.com" // "null" ),
@@ -699,10 +698,9 @@ tee ~/.sshv/filter 2>/dev/null <<\EOF
 | [.ip, .name, .account, .source, .state, .arch, .tags]|@csv
 EOF
 
-  jq -e -f ~/.sshv/filter \
+  jq -er -f ~/.sshv/filter \
          < ~/.sshv/inventory \
          | tr -d \" \
-         | tr ',' ' ' \
          > ~/.sshv/inventory.csv
   [[ -f csv ]] || echo 'Error: could not create the csv file from the inventory'
 }
@@ -722,7 +720,9 @@ update_ssh_config() {
   scp -q vault:inventory .
 
   # parse csv and create config fragment
-  while read -r short long ip; do printf "Host %s %s\n  HostName %s\n" "$short" "$long" "$ip"; done < ~/.sshv/inventory > hosts
+  while read -r ip name account kind state image tags; do
+    printf "Host %s\n  HostName %s\n" "${name}" "${ip}"; done < ~/.sshv/inventory.csv > hosts
+
   [[ -f hosts ]] || echo 'Error: could not create the hosts fragment for ~/.ssh/config'
 
   # Delete previous entries (i.e., stuff between these delimiters)
@@ -829,3 +829,4 @@ main() {
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   main "$@"
 fi
+
