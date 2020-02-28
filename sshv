@@ -1,0 +1,831 @@
+#!/usr/bin/env bash
+#
+# ssh to hosts via certificates using hashicorp vault as the Certificate Authority (CA)
+#
+# Public URL: http://bit.ly/2neL2vI
+# Usage: bash <(curl -sL http://bit.ly/2neL2vI)
+
+# Troubleshooting: Check your current login token
+# curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request GET $VAULT_ADDR/v1/auth/token/lookup
+
+# Handle command line arguments / options / positional parameters
+set_env() {
+  VAULT_SSH_HOSTNAME=${VAULT_SSH_HOSTNAME:-} # ssh tunnel here
+  VAULT_PORT=${VAULT_PORT:-8200}
+  MAC_GNU_GETOPT_PATH=${MAC_GNU_GETOPT_PATH:-/usr/local/opt/gnu-getopt/bin/getopt}
+  URI_SCHEME=${URI_SCHEME:-http} # http for development or ssh tunnel. https for production.
+  VAULT_ADDR=${VAULT_ADDR:-${URI_SCHEME}://localhost:${VAULT_PORT}}
+  RED='\033[0;31m'
+  GREEN='\033[0;32m'
+  NC='\033[0m'
+  is_authenticated="false"
+  userfile="$HOME/.sshv/ad_username" # path of persisted username
+}
+
+# Handle sigterm
+exit_on_signal_SIGINT() {
+  delete_tunnel
+  echo
+  exit 1
+}
+
+# Handle sigkill
+exit_on_signal_SIGTERM() {
+  delete_tunnel
+  echo
+  exit 1
+}
+
+# Set traps to cleanup before ending.
+set_traps() {
+  # in case the user Ctrl+C'd the last run before deleting the tunnel
+  trap exit_on_signal_SIGINT SIGINT
+  trap exit_on_signal_SIGTERM SIGTERM
+}
+
+# seed a file. although verbose, this approach lets you seed at runtime. alternatively, seed statically in the sshv dockerfile
+seed_just_installed() {
+  # create seed file
+  tee just_installed &>/dev/null <<< "true"
+
+  # create the volume
+  docker run --name helper --mount source="sshv-$(whoami)",target=/home/sshv --user root --entrypoint /bin/bash \
+         fcienablementpublic/sshv:latest -c 'chown -R sshv:sshv /home/sshv/.sshv; chmod -R 0770 /home/sshv/.sshv'
+
+  # copy the seed file
+  docker cp just_installed helper:/home/sshv/.sshv/just_installed >/dev/null
+
+  # set permissions
+  docker restart helper >/dev/null
+  sleep 1 # give it time to complete
+
+  # clean up
+  docker stop helper >/dev/null
+  docker rm helper >/dev/null
+  rm -f just_installed
+}
+
+
+# install containerized sshv
+install_container() {
+  read -er -p "DNS host's IP address: " -i "1.2.3.4" dns_host
+  read -er -p "DNS search suffix 1: " -i "foo.com" dns_suffix1
+  read -er -p "DNS search suffix 2: " -i "sub.foo.com" dns_suffix2
+
+  sudo tee /usr/local/bin/sshv &>/dev/null <<EOF
+#!/bin/bash
+# containerized sshv
+
+# if removing
+if [[ \${1} == "-r" || \${1} == "--remove" ]]; then
+  docker volume rm -f "sshv-$(whoami)" >/dev/null
+  docker volume rm -f "sshv-etcssh" >/dev/null
+  docker volume rm -f "sshv-usrlocalbin" >/dev/null
+  sudo rm -f /usr/local/bin/sshv
+  echo "sshv was succesfully removed"
+  exit 0
+fi
+
+docker run -it \\
+  --dns ${dns_host} \\
+  --dns-search ${dns_suffix1} \\
+  --dns-search ${dns_suffix2} \\
+  --name sshv-$(whoami) \\
+  --rm \\
+  --mount source=sshv-$(whoami),target=/home/sshv \\
+  --mount source=sshv-etcssh,target=/etc/ssh \\
+  --mount source=sshv-usrlocalbin,target=/usr/local/bin \\
+  -p 127.0.0.1:8080:8080 \\
+  -p 127.0.0.1:8200:8200 \\
+  fcienablementpublic/sshv:latest "\$@"
+
+# for debugging, type "source \$(which sshv)" and then "sshvd"
+sshvd() {
+  docker run -it \\
+    --dns ${dns_host} \\
+    --dns-search ${dns_suffix1} \\
+    --dns-search ${dns_suffix2} \\
+    --name sshv-$(whoami) \\
+    --rm \\
+    --mount source=sshv-$(whoami),target=/home/sshv \\
+    --mount source=sshv-etcssh,target=/etc/ssh \\
+    --mount source=sshv-usrlocalbin,target=/usr/local/bin \\
+    -p 127.0.0.1:8080:8080 \\
+    -p 127.0.0.1:8200:8200 \\
+    --user root \\
+    --entrypoint bash \\
+    fcienablementpublic/sshv:latest
+}
+EOF
+  sudo chmod 0775 /usr/local/bin/sshv
+
+  # seed / persist a file so the container can act on it
+  seed_just_installed
+
+  # logically, you MUST now continue the install from INSIDE the container now, not outside!
+  exec /usr/local/bin/sshv
+}
+
+# update sshv
+update_sshv() {
+  do_update_hosts_ca_key=1
+  install_local
+  update_ssh_config
+}
+
+# install sshv locally
+install_local() {
+  mkdir -p ~/.sshv
+
+  # download latest version
+  if sudo timeout 7 curl -sSL http://bit.ly/2neL2vI -o /usr/local/bin/sshv; then
+    echo "Succesfully downloaded the latest version of sshv."
+  else
+    echo "Could not download the latest version of sshv. Using the existing version instead."
+  fi
+  sudo chmod 0775 /usr/local/bin/sshv
+}
+
+# if not running in a container, which is already /usr/local/bin/sshv, then create that executable
+install_executable() {
+  if [[ "${install_type}" == "container" ]]; then install_container; else install_local; fi
+}
+
+# is this a local or docker install?
+get_install_type() {
+  install_type="local" # set default
+
+  # leave if docker is not installed
+  # NOTE: when installing the container version, we do an "exec /usr/local/bin/sshv", which starts the container, and now
+  # we're INSIDE that container, which makes this a local install, so return
+  if ! type docker &>/dev/null; then install_type="local"; return; fi
+
+  # since docker is (presumably) installed, ask to install as a container
+  read -er -p "How should I install sshv? local or container? " -i "${install_type}" install_type
+
+  # can this user run the docker command?
+  if ! docker 2>/dev/null; then echo "Error running docker. Try: usermod -a -G docker $(whoami), and re-open this terminal."; exit 1; fi
+}
+
+# show what the installation did
+show_install_details() {
+      echo
+      echo " ####################################################### "
+      printf "       ${GREEN}Installation successful${NC}         \n"
+      echo " ####################################################### "
+      echo
+      echo " Installation details:                                   "
+      echo " 1. created installer at /usr/local/bin/sshv             "
+      echo " 2. created an entry in ~/.ssh/config                    "
+      echo " 3. created a config directory at ~/.sshv                "
+      echo
+      echo " What now?                                               "
+      echo " 1. Try a log in: sshv you@server.com                    "
+      echo " 2. See examples: sshv --help                            "
+      echo " 3. Search inventory: sshv -s foo                        "
+      echo
+}
+
+# Install sshv if not installed
+install() {
+  # if already installed (last step of install is creating ~/.ssh/config), return (if args present) or display help (if no args present)
+  if grep -q "# Added by sshv" ~/.ssh/config 2>/dev/null; then
+    [[ ${#args[@]} -eq 0 ]] && display_help || return
+  fi
+
+  # install
+  get_install_type
+  install_executable
+  get_vaulthost
+  create_vaulthost_keys
+  install_vault_ssh_config
+
+  # remember that we were just installed
+  tee ~/.sshv/just_installed >/dev/null <<< "true"
+}
+
+# if running as a container, the (current) assumption is that ~/.sshv/ad_password exists
+check_containerized() {
+  if [[ -f /.dockerenv ]]; then
+    is_container="true"
+  else
+    is_container="false"
+  fi
+}
+
+# Create a secure ssh tunnel by adding an ssh_config entry
+install_vault_ssh_config() {
+  # ensure ~/.ssh exists
+  mkdir -p ~/.ssh
+  chmod 700 ~/.ssh
+
+  # port forwarding option requires container to listen on all ipv4 interfaces
+  if [[ "${is_container}" == "true" ]]; then interface="0.0.0.0"; else interface="127.0.0.1"; fi
+
+  path="$HOME/.ssh/config"
+
+  # if not already there, add this entry
+  if ! grep -q -F "# Added by sshv" "${path}" 2>/dev/null; then
+    tee -a "${path}" >/dev/null <<EOF
+# Added by sshv
+# ---config begin---
+Host vault
+   HostName ${VAULT_SSH_HOSTNAME}
+   ServerAliveInterval 3
+   IdentityFile ~/.ssh/id_ed25519_vaulthost
+   CertificateFile ~/.ssh/id_ed25519_vaulthost-cert.pub
+   User fwd
+   LocalForward ${interface}:8200 127.0.0.1:8200
+   LocalForward ${interface}:8080 127.0.0.1:8080
+# ---config end---
+# ---hosts begin---
+# ---hosts end---
+# End of sshv
+EOF
+  [[ $? -eq 0 ]] || print "Error: could not update your ${path}\n"
+fi
+}
+
+# create an ssh tunnel to vault. The tunnel authenticates and secures traffic
+create_tunnel() {
+  if ! ssh -vvv -NfT vault &>~/.sshv/create-tunnel.log; then
+    printf "\nError: could not create ssh tunnel. Tips:\n"
+    printf "  1. Add your public key to /home/fwd/.ssh/authorized_keys on the vault server (e.g., via a Jenkins job).\n"
+    printf "  2. Set permissions on the vault server with chmod 0600 /home/fwd/.ssh/authorized_keys\n"
+    printf "  3. Check your spelling of ${RED}%s${NC}\n" "${VAULT_SSH_HOSTNAME}"
+    printf "  4. Check for networking problems reaching ${RED}%s${NC}\n\n" "${VAULT_SSH_HOSTNAME}"
+    exit 1
+  fi
+}
+
+# display help text
+display_help() {
+cat <<EOF
+
+Welcome to sshv
+
+  Purpose: A vault-aware ssh client
+
+    Usage: sshv [OPTIONS] destination [COMMAND]
+
+  Example: sshv user1@sshserver
+  Example: sshv user1@sshserver echo "hello world"
+  Example: sshv user1@sshserver -- -p 1022 echo "hello world"
+
+Description
+  sshv is a wrapper for ssh. It logs into vault, creates a local ssh keypair, sends
+  the resulting public key to vault's CA (ssh secrets engine) for signing, receives
+  the resulting certificate, and calls ssh with arguments to use the certificate
+  against the user@server you specify.
+
+Options:
+  -d, --debug         Debug mode for sshv (i.e., enable bash's set -x)
+  -f, --portforward   Enable http://localhost:8080 and :8200. Exit with Ctrl+C
+  -h, --help          Display help
+  -r, --remove        Remove sshv
+  -s, --search        Search inventory. Example: sshv -s js1
+  -u, --update        Update sshv, the latest hosts_ca cert, and latest inventory
+  --                  Send everything after 2 dashes as arguments to ssh, not sshv
+
+EOF
+exit
+}
+
+# enable port forwards
+port_forward() {
+  # see ~/.ssh/config
+ printf "\nPort forwarding enabled. Options:\n  1. open vault: http://localhost:8200\n  2. open jenkins: http://localhost:8080\n  3. quit: ctrl+c\n\n"
+ ssh -NT vault
+ exit 0
+}
+
+# remove sshv
+remove_sshv() {
+  # if local install
+  if [[ -f /usr/local/bin/sshv ]]; then
+    local tmp=mktemp
+    sed '/# Added by sshv/,/# End of sshv/d' ~/.ssh/config >/dev/null > "${tmp}" && mv -f "${tmp}" ~/.ssh/config
+    sudo sed "/# Added by sshv/,/# End of sshv/d" /etc/ssh/ssh_known_hosts 2>/dev/null \
+         | tee "${tmp}" && sudo mv "${tmp}" /etc/ssh/ssh_known_hosts
+    rm -rf ~/.sshv
+    rm -f ~/.ssh/id_ed25519_vaulthost*
+    sudo rm -f /usr/local/bin/sshv
+
+    echo "sshv succesfully removed"
+    exit 0
+  else
+    echo "sshv is not installed"
+    exit 0
+  fi
+
+}
+
+# get inventory
+# $1 = the search pattern (e.g., foo or 111)
+search_inventory() {
+  get_inventory_refresh
+  if [[ $inventory_refresh -eq 1 ]]; then
+    scp -q vault:inventory ~/.sshv/
+    update_ssh_config
+  fi
+
+  local tmp="$(mktemp)"
+
+  # use grep for case-insensitive searches instead of jq's contain or ascii-downcase
+  grep -i --color=auto "${1}" <(column -t < ~/.sshv/inventory.csv)
+
+  rm "${tmp}"
+  exit 0
+}
+
+# get options: https://gist.github.com/cosimo/3760587
+get_options() {
+  if ! OPTS=$(getopt -o hfruds: --long help,portforward,update,remove,debug,search: -n 'parse-options' -- "$@"); then display_help; exit; fi
+  eval set -- "$OPTS"
+
+  while true; do
+    case "$1" in
+             -d|--debug)        set -x ; shift ;;
+             -h|--help)         display_help ; shift ;;
+             -f|--portforward)  port_forward ; shift ;;
+             -r|--remove)       remove_sshv ; shift ;;
+             -u|--update)       update_sshv ; shift ;;
+             -s|--search)       search_inventory "${2}"; shift ;;
+             --)  shift ; args=(); until [[ -z ${1+x} ]]; do args+=("$1"); shift; done; break ;;
+                       *)  echo "Internal error!" ; display_help; exit 1 ;;
+    esac
+  done
+}
+
+# Which OS are you running?
+get_os() {
+  unameOut="$(uname -s)"
+  case "${unameOut}" in
+      Linux*)     os="Linux";;
+      Darwin*)    os="Mac";;
+      CYGWIN*)    os="Cygwin";;
+      MINGW*)     os="MinGw";;
+      *)          os="UNKNOWN:${unameOut}"
+    esac
+}
+
+# Require this
+req_jq() {
+  if ! type jq &>/dev/null; then
+    printf "Please install jq first:\n Mac: brew install jq coreutils gnu-getopt bash\n Ubuntu: sudo apt install jq\n RHEL: yum install epel-release -y && sudo yum install jq -y\n"
+    printf "\n############################################################################################################\n"
+    printf "\n${RED} After installation, Mac users must open a new Terminal (or iterm) window, not just a tab! ${NC}\n"
+    printf "\n############################################################################################################\n\n"
+    exit 1
+  fi
+}
+
+# Require this
+req_ssh() {
+  if ! type ssh &>/dev/null; then
+    printf "Please install ssh first\n"
+    exit 1
+  fi
+}
+
+# If running MacOS, require coreutils is installed (use greadlink as a proxy)
+req_coreutils() {
+  if ! type greadlink &>/dev/null; then
+    printf "Please install coreutils first: brew install coreutils gnu-getopt jq bash\n"
+    exit 1
+  fi
+}
+
+# Linux usually has getopt (which allows long options) but MacOS, which is
+# based on FreeBSD, needs the gnu version: brew install gnu-getopt
+# https://stackoverflow.com/a/402410/1231693
+req_getopt() {
+  # if getopt not already installed
+  if [[ ! -f "${MAC_GNU_GETOPT_PATH}" ]]; then
+    printf "Please install getopt first: brew install gnu-getopt coreutils jq bash\n"
+    exit 1
+  fi
+
+  # override getopt shell built-in with gnu version but only for this script:
+  # https://stackoverflow.com/a/47542834/1231693
+  export PATH="/usr/local/opt/gnu-getopt/bin:$PATH"
+  export FLAGS_GETOPT_CMD="${MAC_GNU_GETOPT_PATH}"
+}
+
+# load or persist an ssh hostname so we can tunnel traffic to vault
+get_vaulthost() {
+  local path="$HOME/.sshv/vault_ssh_hostname"
+  local hostname="vault.foo.com"
+
+  if [[ ! -f "${path}" ]]; then
+    read -er -p "Enter the vault ssh server's public hostname (FQDN or short name) or IP: " -i "${hostname}" hostname
+    echo "${hostname}" > "${path}"
+  fi
+
+  VAULT_SSH_HOSTNAME=$(cat "${path}")
+}
+
+# create ssh key for vaulthost. this is a one-time thing
+create_vaulthost_keys() {
+  # create keys if non-existant
+  if [[ ! -f ~/.ssh/id_ed25519_vaulthost ]]; then
+    ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519_vaulthost -C "sshv temporary key" &>/dev/null <<< n # n means no to overwrite
+    printf "\nOn the vault ssh host, add the following public key to /home/fwd/.ssh/authorized_keys:\n"
+    printf "${RED}%s${NC}\n" "$(cat ~/.ssh/id_ed25519_vaulthost.pub)"
+    printf "NOTE: After this initial connection, sshv will use certificates, not keys, for authentication.\n"
+    printf "The authorized_keys entry above will be deleted automatically.\n\n"
+    read -er -p "Press Enter once added..."
+  fi
+}
+
+# Check prereqs
+check_prereqs() {
+  # all OS's require these
+  req_ssh
+  req_jq
+
+  case "${os}" in
+      Mac*)     req_coreutils; req_getopt;;
+    Linux*)                              ;;
+         *)                              ;;
+  esac
+}
+
+# Check network connectivity
+check_network() {
+  # Check if curl results are meaningful. Otherwise, ssh may work to the host but vault's container isn't running.
+  # On Mac, timeout is part of coreutils (then gtimeout and timeout have same sha1sum)
+  result="$(timeout 3 curl -sS --request GET http://localhost:${VAULT_PORT}/v1/auth/token/lookup)"
+  if [[ ! $result == *"missing client token"* ]]; then
+      printf "\n${RED}Error${NC}: curl -sS --request GET http://localhost:%s/v1/auth/token/lookup did ${RED}NOT${NC} return the expected \"missing client token\". Is vault running?\n\n" "${VAULT_PORT}"
+      exit 1
+  fi
+}
+
+# Validate an existing token, if it exists
+check_token() {
+  local resfile="${HOME}/.sshv/checktoken.txt"           # file to hold curl results temporarily
+
+  # if the token exists, check if token is valid
+  if [[ -f ~/.sshv/token ]]; then
+    # if the token exists, the persisted username should exist too
+    [[ -f "${userfile}" ]] && ad_username=$(cat "${userfile}") # load username from disk if persisted
+
+    VAULT_TOKEN="$(cat ~/.sshv/token)"
+    curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request GET "$VAULT_ADDR/v1/auth/token/lookup" -o "${resfile}"
+
+    # check for curl / vault failure. Example: {"errors":["1 error occurred:\n\t* permission denied\n"]}
+    if grep -q "error" "${resfile}"; then
+      printf "Error from vault while checking current token: ${RED}%s${NC}. Possible reasons:\n" "$(cat ${resfile})"
+      printf "  1. Your vault policy does not have read access to auth/token/lookup.\n"
+      printf "  2. Your vault token expired, so you must re-authenticate.\n\n"
+      delete_file "${resfile}"
+    else # if you get here, your token is presumably still valid
+      is_authenticated="true"
+    fi
+  fi
+}
+
+# Get AD username
+get_ad_username() {
+  read -er -p "Enter your Active Directory (AD) username (just foo, not foo@bar.com): " -i "${ad_username}" ad_username
+
+  # ensure that it's not empty
+  [[ -z ${ad_username:+x} ]] && { printf "\nError: no username\n"; exit 1; }
+
+  # persist username
+  tee "${userfile}" 1>/dev/null <<< "${ad_username}"
+}
+
+# Get AD password
+get_ad_password() {
+  read -er -s -p "Enter your Active Directory (AD) password: " ad_password
+
+  # ensure it's not empty
+  [[ -z ${ad_password:+x} ]] && { printf "\nError: no password\n"; exit 1; }
+
+  printf "\n\n" # breathing room
+}
+
+# For (curl) security, persist the AD password to disk temporarily
+# For secure curl login (i.e., don't show passwords in bash history or ps listing). Details: https://unix.stackexchange.com/a/385349/171736
+persist_ad_password() {
+  secret="${1}"
+  creds_filepath="$(mktemp)"
+  chmod 0700 "${creds_filepath}" # only allow the owner to see this for the split second it exists
+  tee "${creds_filepath}" 1>/dev/null <<< "{\"password\": \"${ad_password}\"}"
+}
+
+# Get login credentials
+get_creds() {
+  get_ad_username
+  get_ad_password
+  persist_ad_password
+}
+
+# Send credentials to vault
+send_creds() {
+  local resfile="${HOME}/.sshv/curl_sig_req_results.txt" # file to hold curl results temporarily
+
+  # try to log in
+  curl -sS --request POST --data @"${creds_filepath}" "$VAULT_ADDR/v1/auth/ldap/login/$ad_username" -o "${resfile}"
+
+  # check for curl / vault failure. Example: {"errors":["1 error occurred:\n\t* permission denied\n"]}
+  if grep -q "error" "${resfile}"; then
+    printf "Error from vault while logging into LDAP: ${RED}%s${NC}. Possible reasons:\n" "$(cat ${resfile})"
+    printf "  1. $ad_username does not exist in Active Directory.\n" "${ad_username}"
+    printf "  2. Your username or password are incorrect.\n"
+    delete_file "${resfile}"
+    exit 1
+   fi
+
+  # get or persist the vault token. tokens are temporary, so attack vector is presumably small
+  token="$(jq -r '.auth.client_token' < $resfile)"
+
+  # handle any empty token error
+  if [[ -z ${token+x} ]]; then { echo "Error obtaining a vault token. Curl returned: $(cat $resfile)"; delete_file "${resfile}"; exit 1; }; fi
+
+  # persist, secure, and check it
+  tee ~/.sshv/token 1>/dev/null <<< "${token}"
+  chmod 0700 ~/.sshv/token
+  [[ ! -f ~/.sshv/token ]] && echo "WARN: could not persist token to ~/.sshv/token"
+
+  # set the vault token for future API / curl commands
+  VAULT_TOKEN="${token}"
+}
+
+# Delete the stored credentials
+delete_creds() {
+  if ! shred -u "${creds_filepath}" 2>/dev/null; then
+    rm -f "${creds_filepath}" 2>/dev/null
+  fi
+
+  # if not deleted, warn
+  [[ -f "${creds_filepath}" ]]       && "Warning: could not delete password from disk at $creds_filepath."
+  [[ -f "$HOME/.sshv/ad_password" ]] && "Warning: could not delete password from disk at $HOME/.sshv/ad_password."
+
+  unset creds_filepath
+  unset ad_password
+}
+
+# Log into vault using Active Directory
+authenticate_to_vault() {
+  check_token
+
+  if [[ $is_authenticated == "false" ]]; then
+    get_creds
+    send_creds
+    delete_creds
+  fi
+}
+
+# persist to disk
+get_hosts_ca_key() {
+  timeout 7 curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request GET "$VAULT_ADDR/v1/hosts-ca/public_key" > ~/.sshv/hosts_ca.pub
+}
+
+# trust the hosts ca (avoids the "The authenticity of host foo (IP) can't be established")
+trust_hosts_ca() {
+  [[ ! -f ~/.sshv/hosts_ca.pub || $do_update_hosts_ca_key -eq 1 ]] && get_hosts_ca_key
+
+  path=/etc/ssh/ssh_known_hosts
+  command1="@cert-authority * $(cat ~/.sshv/hosts_ca.pub)"
+
+  # return if the pub key is already present
+  if grep -q -F "${command1}" "${path}" 2>/dev/null; then return; fi
+
+  # otherwise, continue
+  comment1="# Added by sshv"
+  comment2="# End of sshv"
+  sudo tee "${path}" >/dev/null <<EOF
+${comment1}
+${command1}
+${comment2}
+EOF
+
+  # harden
+  sudo chown "$(id -u):$(id -g)" /etc/ssh/ssh_known_hosts
+  sudo chmod 770 /etc/ssh/ssh_known_hosts
+}
+
+
+# get or renew sshv's client cert to ssh host running vault
+get_my_cert() {
+  set_csr_parms "262800m" "fwd" ~/.ssh/id_ed25519_vaulthost.pub
+  get_cert ~/.ssh/id_ed25519_vaulthost-cert.pub
+}
+
+# renew this sshv client's certificate to the ssh host running vault
+check_my_age() {
+  # renew if older than 150 days (5 months)
+  if [[ -f ~/.ssh/id_ed25519_vaulthost-cert.pub ]]; then
+    count=$(( $(find ~/.ssh -name id_ed25519_vaulthost-cert.pub -mtime +150 | wc -l) ))
+    if [[ $count -gt 0 ]]; then get_my_cert; fi
+  else # file not found
+    get_my_cert # get cert
+  fi
+}
+
+# Create a temporary, i.e., worthless after its certificate expires, ssh keypair for this user
+# Currently, this creates an rsa keypair. ed25519 not supported yet in vault
+# Warning: the ssh-keygen -N '' means that the keypair will NOT have a password (but ttl's are short)
+# This approach simplifies things because you don't need ssh-agent or to enter a password in it.
+# See https://github.com/ssh-vault/ssh-vault/issues/37
+create_keypair() {
+  # Note that "echo yes | ... " overwrites any existing output file
+  echo printf | ssh-keygen -N '' -t rsa -b 4096 -a 100 -f ~/.ssh/id_rsa_vault >/dev/null
+}
+
+# Set csr parameters
+#   $1 = ttl
+#   $2 = principal requested
+#   $3 = public key to sign
+set_csr_parms() {
+local ttl=${1:-15s} # if not provided, default ttl to 15 seconds
+local principals="${2:-$ad_username},fssops"
+local pubkey=${3:-~/.ssh/id_rsa_vault.pub} # if not provided, default to this path
+local csrfile="${HOME}/.sshv/csr.json"
+
+tee "${csrfile}" >/dev/null <<-EOF
+	{
+	"public_key"       :  "$(tr '\n' '*' <${pubkey} | sed 's/\*/\\n/g')",
+	"ttl"              :  "${ttl}",
+	"valid_principals" :  "${principals}",
+	"cert_type"        :  "user",
+	"key_id"           :  "sshv: FROM ${ad_username} AT $(hostname -f)$(ifconfig | awk '/inet 9./{print $2}' | head -n 1) TO ${args[@]} ON $(date -u '+%Y-%m-%d %H:%M:%S UTC')",
+	"critical_options" :  {},
+	"extension"        :  { "permit-pty":"", "permit-port-forwarding": "" },
+	"cert_type"        :  "user"
+	}
+EOF
+}
+
+# if the inventory is recent, remember that
+get_inventory_refresh() {
+  inventory_refresh=0
+  if [[ -f ~/.sshv/inventory ]]; then
+    count=$(( $(find ~/.sshv -name inventory -mmin +720 | wc -l) ))
+    [[ $count -gt 0 ]] && inventory_refresh=1
+  else # file doesn't exist
+    inventory_refresh=1
+  fi
+}
+
+# create csv
+create_csv() {
+
+  tee ~/.sshv/filter <<\EOF
+# #######################################
+#            Cheatsheet
+# #######################################
+#
+# {}   = create a new object
+# ()   = expression
+# //   = if LHS isn't found, use RHS
+# |[   = reformat as an array
+# @csv = filter output as csv
+
+._meta.hostvars[] |
+  {
+   name:    ( ."guest.hostName"? // .fullyQualifiedDomainName? // .name? + ".regtech.cloud.ibm.com" // "null" ),
+   ip:      ( .primaryIpAddress? // ."guest.ipAddress"? // .primary_network_interface?.primary_ipv4_address? // "null" ),
+   state:   ( ."guest.guestState"? // .powerState.name? // .status.name? // .status? // (if .hardwareStatusId? == 5 then "running" else "null" end )),
+   account: (.account? // ( ."runtime.host.name"? | scan("[0-9]{6,7}") ) // "ERROR_Update_VMWare_host_field"),
+   arch:    ( ."guest.guestId"? // .image.name? // "no_image_returned" ),
+   source:  ( .source? // "vmware" ),
+   tags:    (if .tags? == null or .tags? == [] then "no_tags_returned" else (.tags|join(";")) end)
+  }
+| [.ip, .name, .account, .source, .state, .arch, .tags]|@csv
+EOF
+
+  jq -er -f ~/.sshv/filter \
+         < ~/.sshv/inventory \
+         | tr -d \" \
+         > ~/.sshv/inventory.csv
+  [[ -f csv ]] || echo 'Error: could not create the csv file from the inventory'
+}
+
+# update ssh_config with latest inventory
+update_ssh_config() {
+  local tmp="$(mktemp)"
+  pushd ~/.sshv &>/dev/null || { echo "could not pushd ~/.sshv"; exit; }
+  scp -q vault:inventory . # download inventory
+  IFS_ORIG="${IFS}" # back up
+  IFS=','
+
+  # this creates ~/.sshv/inventory.csv
+  create_csv
+
+  # download inventory
+  scp -q vault:inventory .
+
+  # parse csv and create config fragment
+  while read -r ip name account kind state image tags; do
+    printf "Host %s\n  HostName %s\n" "${name}" "${ip}"; done < ~/.sshv/inventory.csv > hosts
+
+  [[ -f hosts ]] || echo 'Error: could not create the hosts fragment for ~/.ssh/config'
+
+  # Delete previous entries (i.e., stuff between these delimiters)
+  sed '/# ---hosts begin---/,/# ---hosts end---/{//!d;}' ~/.ssh/config >/dev/null > "${tmp}" && mv -f "${tmp}" ~/.ssh/config
+
+  # if no backup, make one
+  if ! ls ~/.ssh/config-*.bkp &>/dev/null; then cp ~/.ssh/config{,"-$(date '+%Y%m%d-%H%M%S')".bkp}; fi
+
+  # add entries
+  CURRENT="$(<~/.ssh/config)"
+  ADDITIONS="$(<hosts)"
+  echo "${CURRENT/'# ---hosts end---'/${ADDITIONS}$'\n'# ---hosts end---}" > ~/.ssh/config # ignore this: '}"
+
+  # clean up
+  IFS="${IFS_ORIG}" # restore
+  popd &>/dev/null || { echo "could not popd ~/.sshv"; exit; }
+}
+
+# delete file
+delete_file() {
+  [[ -z ${1+x} ]] && { echo "no parameter passed to delete_file"; exit 1; }
+  rm -f "${1}"
+  [[ -f "${1}" ]] && { echo "error: couldn't delete ${1}"; exit 1; }
+}
+
+# Get certificate from Vault (CA)
+# $1 = the certificate you want
+get_cert() {
+  local cert="${1:-$HOME/.ssh/id_rsa_vault-cert.pub}"
+
+  local resfile="${HOME}/.sshv/curl_sig_req_results.txt" # file to hold curl results temporarily
+  local csrfile="${HOME}/.sshv/csr.json"
+
+  curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request POST \
+       --data @"${csrfile}" "${VAULT_ADDR}/v1/users-ca/sign/role1" -o "${resfile}"
+
+  # debugging
+  # cat "${csrfile}"
+  # cat $resfile
+
+  # Check for failure. Example: {"errors":["1 error occurred:\n\t* permission denied\n"]}
+  if grep -q "error" "${resfile}"; then
+    printf "\nError from vault while getting certificate from vault: ${RED}%s${NC}. Possible reasons:\n" "$(cat ${resfile})"
+    printf "  1. In vault, auth/ldap/users/${RED}%s${NC} does not have a vault policy. \n" "${ad_username}"
+    printf "  2. In vault, auth/ldap/users/${RED}%s${NC} can not read users-ca/sign/role1.\n" "${ad_username}"
+    printf "  3. Your vault token's 'token_num_uses' decreased below 0--i.e., you've used this token too many times. Run sshv again.\n"
+    delete_file "${resfile}"
+    exit 1
+   fi
+
+  jq -er ".data.signed_key" < "${resfile}" >"${cert}"
+  delete_file "${resfile}"
+  delete_file "${csrfile}"
+}
+
+# Run ssh command or give instructions to do that
+run_ssh() {
+  # don't run ssh if just installed
+  [[ -f ~/.sshv/just_installed ]] && { rm -f ~/.sshv/just_installed; show_install_details; return; }
+
+  if [[ -z "${args[*]+x}" ]]; then
+    display_help
+  else
+    ssh -o identitiesonly=yes \
+        -o certificatefile=~/.ssh/id_rsa_vault-cert.pub \
+        -i ~/.ssh/id_rsa_vault \
+         "${args[@]}"
+  fi
+}
+
+# delete the ssh tunnel created earlier to avoid port conflicts on 8200
+delete_tunnel() {
+  # build an array of all PIDs doing ssh to vault. E.g., 123 456 789
+  tunnel_pids=("$(ps ax | awk '/[s]sh -vvv -NfT vault/{print $1}' | tr '\n' ' ')")
+
+  # kill them all
+  if [[ ! "${tunnel_pids[*]}" == "" ]]; then
+    kill ${tunnel_pids[@]}
+  fi
+}
+
+# run
+main() {
+  set_traps
+  get_os
+  set_env
+  check_prereqs
+  get_options "$@"
+  check_containerized
+  install
+  create_tunnel
+  check_network
+  authenticate_to_vault
+  trust_hosts_ca
+  check_my_age
+  create_keypair
+  set_csr_parms
+  get_cert
+  run_ssh
+  delete_tunnel
+}
+
+# Start here and pass any parameters
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  main "$@"
+fi
