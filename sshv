@@ -283,7 +283,7 @@ Options:
   -f, --portforward   Enable http://localhost:8080 and :8200. Exit with Ctrl+C
   -h, --help          Display help
   -r, --remove        Remove sshv
-  -s, --search        Search vcsa inventory. Example: sshv -s js1
+  -s, --search        Search inventory. Example: sshv -s js1
   -u, --update        Update sshv, the latest hosts_ca cert, and latest inventory
   --                  Send everything after 2 dashes as arguments to ssh, not sshv
 
@@ -320,23 +320,19 @@ remove_sshv() {
 
 }
 
-# get inventory from vcsa
+# get inventory
 # $1 = the search pattern (e.g., foo or 111)
 search_inventory() {
   get_inventory_refresh
   if [[ $inventory_refresh -eq 1 ]]; then
-    scp -q vault:vcsa-inventory ~/.sshv/
+    scp -q vault:inventory ~/.sshv/
     update_ssh_config
   fi
 
   local tmp="$(mktemp)"
 
   # use grep for case-insensitive searches instead of jq's contain or ascii-downcase
-  jq -er '..| {name: .name?, state: ."guest.guestState"?, hostname: ."guest.hostName"?, ip: ."guest.ipAddress"?}
-          | select(.state)|[.ip,.hostname,.name,.state]|@csv' \
-         ~/.sshv/vcsa-inventory |\
-         tr -d \" | tr , ' ' | column -t |\
-         grep -i --color=auto "${1}"
+  grep -i --color=auto "${1}" <(column -t < ~/.sshv/inventory.csv)
 
   rm "${tmp}"
   exit 0
@@ -667,31 +663,66 @@ EOF
 # if the inventory is recent, remember that
 get_inventory_refresh() {
   inventory_refresh=0
-  if [[ -f ~/.sshv/vcsa-inventory ]]; then
-    count=$(( $(find ~/.sshv -name vcsa-inventory -mmin +720 | wc -l) ))
+  if [[ -f ~/.sshv/inventory ]]; then
+    count=$(( $(find ~/.sshv -name inventory -mmin +720 | wc -l) ))
     [[ $count -gt 0 ]] && inventory_refresh=1
   else # file doesn't exist
     inventory_refresh=1
   fi
 }
 
+# create csv
+create_csv() {
+
+  tee ~/.sshv/filter <<\EOF
+# #######################################
+#            Cheatsheet
+# #######################################
+#
+# {}   = create a new object
+# ()   = expression
+# //   = if LHS isn't found, use RHS
+# |[   = reformat as an array
+# @csv = filter output as csv
+
+tee ~/.sshv/filter 2>/dev/null <<\EOF
+._meta.hostvars[] |
+  {
+   name:    ( ."guest.hostName"? // .fullyQualifiedDomainName? // .name? + ".regtech.cloud.ibm.com" // "null" ),
+   ip:      ( .primaryIpAddress? // ."guest.ipAddress"? // .primary_network_interface?.primary_ipv4_address? // "null" ),
+   state:   ( ."guest.guestState"? // .powerState.name? // .status.name? // .status? // (if .hardwareStatusId? == 5 then "running" else "null" end )),
+   account: (.account? // ( ."runtime.host.name"? | scan("[0-9]{6,7}") ) // "ERROR_Update_VMWare_host_field"),
+   arch:    ( ."guest.guestId"? // .image.name? // "no_image_returned" ),
+   source:  ( .source? // "vmware" ),
+   tags:    (if .tags? == null or .tags? == [] then "no_tags_returned" else (.tags|join(";")) end)
+  }
+| [.ip, .name, .account, .source, .state, .arch, .tags]|@csv
+EOF
+
+  jq -e -f ~/.sshv/filter \
+         < ~/.sshv/inventory \
+         | tr -d \" \
+         | tr ',' ' ' \
+         > ~/.sshv/inventory.csv
+  [[ -f csv ]] || echo 'Error: could not create the csv file from the inventory'
+}
+
 # update ssh_config with latest inventory
 update_ssh_config() {
   local tmp="$(mktemp)"
   pushd ~/.sshv &>/dev/null || { echo "could not pushd ~/.sshv"; exit; }
-  scp -q vault:vcsa-inventory . # download inventory
+  scp -q vault:inventory . # download inventory
   IFS_ORIG="${IFS}" # back up
   IFS=','
 
-  # download inventory
-  scp -q vault:vcsa-inventory .
+  # this creates ~/.sshv/inventory.csv
+  create_csv
 
-  # create csv
-  jq -er '..| {name: .name?, state: .guest.guestState?, hostname: ."guest.hostName"?, ip: ."guest.ipAddress"?} | select(.ip) | [.name,.hostname,.ip]|@csv' ~/.sshv/vcsa-inventory > csv
-  [[ -f csv ]] || echo 'Error: could not create the csv file from the inventory'
+  # download inventory
+  scp -q vault:inventory .
 
   # parse csv and create config fragment
-  while read -r short long ip; do printf "Host %s %s\n  HostName %s\n" "$short" "$long" "$ip"; done < csv > hosts
+  while read -r short long ip; do printf "Host %s %s\n  HostName %s\n" "$short" "$long" "$ip"; done < ~/.sshv/inventory > hosts
   [[ -f hosts ]] || echo 'Error: could not create the hosts fragment for ~/.ssh/config'
 
   # Delete previous entries (i.e., stuff between these delimiters)
@@ -706,7 +737,6 @@ update_ssh_config() {
   echo "${CURRENT/'# ---hosts end---'/${ADDITIONS}$'\n'# ---hosts end---}" > ~/.ssh/config # ignore this: '}"
 
   # clean up
-  rm -f csv hosts
   IFS="${IFS_ORIG}" # restore
   popd &>/dev/null || { echo "could not popd ~/.sshv"; exit; }
 }
