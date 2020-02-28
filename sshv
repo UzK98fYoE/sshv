@@ -332,7 +332,8 @@ search_inventory() {
   local tmp="$(mktemp)"
 
   # use grep for case-insensitive searches instead of jq's contain or ascii-downcase
-  grep -i --color=auto "${1}" <(column -t < ~/.sshv/inventory.csv)
+  # use grep twice because column eats colors
+  grep -i "${1}"  ~/.sshv/inventory.csv | tr ',' ' ' | column -t | grep -i --color=always "${1}"
 
   rm "${tmp}"
   exit 0
@@ -674,7 +675,7 @@ get_inventory_refresh() {
 # create csv
 create_csv() {
 
-  tee ~/.sshv/filter <<\EOF
+  tee ~/.sshv/filter >/dev/null <<\EOF
 # #######################################
 #            Cheatsheet
 # #######################################
@@ -702,7 +703,7 @@ EOF
          < ~/.sshv/inventory \
          | tr -d \" \
          > ~/.sshv/inventory.csv
-  [[ -f csv ]] || echo 'Error: could not create the csv file from the inventory'
+  [[ -f ~/.sshv/csv ]] || echo 'Error: could not create the csv file from the inventory'
 }
 
 # update ssh_config with latest inventory
@@ -721,7 +722,8 @@ update_ssh_config() {
 
   # parse csv and create config fragment
   while read -r ip name account kind state image tags; do
-    printf "Host %s\n  HostName %s\n" "${name}" "${ip}"; done < ~/.sshv/inventory.csv > hosts
+      if [[ "${ip}" != "null" ]]; then printf "Host %s\n  HostName %s\n" "${name}" "${ip}"; fi
+    done < ~/.sshv/inventory.csv > hosts
 
   [[ -f hosts ]] || echo 'Error: could not create the hosts fragment for ~/.ssh/config'
 
