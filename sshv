@@ -702,8 +702,8 @@ EOF
   jq -er -f ~/.sshv/filter \
          < ~/.sshv/inventory \
          | tr -d \" \
-         > ~/.sshv/inventory.csv
-  [[ -f ~/.sshv/inventory.csv ]] || echo 'Error: could not create the csv file from the inventory'
+         > ~/.sshv/inventory.csv \
+         || echo 'Error: could not create the csv file from the inventory'
 }
 
 # update ssh_config with latest inventory
