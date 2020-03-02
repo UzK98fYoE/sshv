@@ -732,8 +732,7 @@ EOF
          || echo 'Error: could not create the csv file from the inventory'
 
   # add a header
-  tee header >/dev/null <<< "${CSV_HEADER}"
-  tee inventory.csv >/dev/null <<< "$(cat header inventory.stage.csv)"
+  printf "%s\n%s\n" "${CSV_HEADER}" "$(cat inventory.stage.csv)" > inventory.csv
 
   # clean up
   rm -f inventory.stage.csv
