@@ -133,6 +133,21 @@ update_sshv() {
   update_ssh_config
 }
 
+
+# open csv
+open_csv() {
+  echo "Trying to open $HOME/.sshv/inventory.csv."
+
+  if [[ ! -f ~/.sshv/inventory.csv ]]; then echo "Error: $HOME/.sshv/inventory.csv not found. Try updating sshv like this: sshv -u"; fi
+
+  open ~/.sshv/inventory.csv \
+    || vim ~/.sshv/inventory.csv \
+    || vi ~/.sshv/inventory.csv \
+    || { echo "Could not open $HOME/.sshv/inventory.csv. Try opening it manually."; exit 1; }
+
+  exit 0
+}
+
 # install sshv locally
 install_local() {
   mkdir -p ~/.sshv
@@ -285,6 +300,7 @@ Options:
   -r, --remove        Remove sshv
   -s, --search        Search inventory. Example: sshv -s js1
   -u, --update        Update sshv, the latest hosts_ca cert, and latest inventory
+  -c, --csv           Open a csv of the latest inventory
   --                  Send everything after 2 dashes as arguments to ssh, not sshv
 
 EOF
@@ -341,7 +357,7 @@ search_inventory() {
 
 # get options: https://gist.github.com/cosimo/3760587
 get_options() {
-  if ! OPTS=$(getopt -o hfruds: --long help,portforward,update,remove,debug,search: -n 'parse-options' -- "$@"); then display_help; exit; fi
+  if ! OPTS=$(getopt -o hfrudcs: --long help,portforward,update,remove,debug,csv,search: -n 'parse-options' -- "$@"); then display_help; exit; fi
   eval set -- "$OPTS"
 
   while true; do
@@ -351,6 +367,7 @@ get_options() {
              -f|--portforward)  port_forward ; shift ;;
              -r|--remove)       remove_sshv ; shift ;;
              -u|--update)       update_sshv ; shift ;;
+             -c|--csv)          open_csv    ; shift ;;
              -s|--search)       search_inventory "${2}"; shift ;;
              --)  shift ; args=(); until [[ -z ${1+x} ]]; do args+=("$1"); shift; done; break ;;
                        *)  echo "Internal error!" ; display_help; exit 1 ;;
@@ -674,8 +691,9 @@ get_inventory_refresh() {
 
 # create csv
 create_csv() {
+  pushd ~/.sshv >/dev/null || exit 1
 
-  tee ~/.sshv/filter >/dev/null <<\EOF
+  tee filter >/dev/null <<\EOF
 # #######################################
 #            Cheatsheet
 # #######################################
@@ -699,11 +717,19 @@ create_csv() {
 | [.ip, .name, .account, .source, .state, .arch, .tags]|@csv
 EOF
 
-  jq -er -f ~/.sshv/filter \
-         < ~/.sshv/inventory \
+  jq -er -f filter \
+         < inventory \
          | tr -d \" \
-         > ~/.sshv/inventory.csv \
+         > inventory.stage.csv \
          || echo 'Error: could not create the csv file from the inventory'
+
+  # add a header
+  tee header >/dev/null <<< "IPV4,HOSTNAME,ACCOUNT,KIND,STATE,IMAGE,TAGS"
+  tee inventory.csv >/dev/null <<< "$(cat header inventory.stage.csv)"
+
+  # clean up
+  rm -f inventory.stage.csv
+  popd >/dev/null || exit 1
 }
 
 # update ssh_config with latest inventory
