@@ -20,6 +20,7 @@ set_env() {
   NC='\033[0m'
   is_authenticated="false"
   userfile="$HOME/.sshv/ad_username" # path of persisted username
+  CSV_HEADER="IPV4,HOSTNAME,ACCOUNT,KIND,STATE,IMAGE,TAGS"
 }
 
 # Handle sigterm
@@ -339,19 +340,26 @@ remove_sshv() {
 # get inventory
 # $1 = the search pattern (e.g., foo or 111)
 search_inventory() {
+  pushd ~/.sshv >/dev/null || exit 1
+
   get_inventory_refresh
   if [[ $inventory_refresh -eq 1 ]]; then
-    scp -q vault:inventory ~/.sshv/
+    scp -q vault:inventory .
     update_ssh_config
   fi
 
-  local tmp="$(mktemp)"
-
   # use grep for case-insensitive searches instead of jq's contain or ascii-downcase
   # use grep twice because column eats colors
-  grep -i "${1}"  ~/.sshv/inventory.csv | tr ',' ' ' | column -t | grep -i --color=always "${1}"
+  grep -i "${1}"  ~/.sshv/inventory.csv > tmp
 
-  rm "${tmp}"
+  # print a header too if there's a result
+  if [[ -s tmp ]]; then
+    printf "%s\n%s\n" "${CSV_HEADER}" "$(cat tmp)" > last_search_result
+    tr ',' ' ' < last_search_result | column -t | grep --color=always -Ei "${1}|\$"
+  fi
+
+  rm -f tmp
+  popd >/dev/null || exit 1
   exit 0
 }
 
@@ -724,7 +732,7 @@ EOF
          || echo 'Error: could not create the csv file from the inventory'
 
   # add a header
-  tee header >/dev/null <<< "IPV4,HOSTNAME,ACCOUNT,KIND,STATE,IMAGE,TAGS"
+  tee header >/dev/null <<< "${CSV_HEADER}"
   tee inventory.csv >/dev/null <<< "$(cat header inventory.stage.csv)"
 
   # clean up
