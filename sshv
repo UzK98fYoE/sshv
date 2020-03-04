@@ -352,11 +352,17 @@ search_inventory() {
   # use grep twice because column eats colors
   grep -i "${1}"  ~/.sshv/inventory.csv > tmp
 
+  # these lines are LONG, so temporarily disable word wrapping, if terminal supports it
+  printf '\033[?7l'
+
   # print a header too if there's a result
   if [[ -s tmp ]]; then
     printf "%s\n%s\n" "${CSV_HEADER}" "$(cat tmp)" > last_search_result
     tr ',' ' ' < last_search_result | column -t | grep --color=always -Ei "${1}|\$"
   fi
+
+  # re-enable word wrapping in the terminal, if supported
+  printf '\033[?7h'
 
   rm -f tmp
   popd >/dev/null || exit 1
@@ -726,7 +732,7 @@ create_csv() {
    cpu:     ( ."config.hardware.numCPU"? // .vcpu?.count // "null" ),
    disks:   ( if .harddisks? == null or .harddisks? == [] then "null" else (.harddisks|length) end ),
    env:     ( if .tags? == null or .tags? == [] then "null" else (.tags|join(";") | sub("-allhosts";"")) end),
-   geo:     ( .datacenter.name? // if .datacenter? == null or .datacenter? == [] then "unknown" else .datacenter end),
+   geo:     ( .datacenter.name? // if .datacenter? == null or .datacenter? == [] then "null" else .datacenter end),
   }
 | [.ip, .name, .account, .api, .state, .image, .tags, .ram, .socket, .cpu, .disks, .env, .geo]|@csv
 EOF
