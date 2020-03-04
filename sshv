@@ -20,7 +20,7 @@ set_env() {
   NC='\033[0m'
   is_authenticated="false"
   userfile="$HOME/.sshv/ad_username" # path of persisted username
-  CSV_HEADER="IPV4,HOSTNAME,ACCOUNT,API,STATE,IMAGE,TAGS,RAM,SOCKET,CPU,DISKS,ENV,GEO"
+  CSV_HEADER="IPV4,HOSTNAME,ACCOUNT,API,STATE,IMAGE,TAGS,RAM,SOCKETS,CPU,DISKS,ENV,GEO"
 }
 
 # Handle sigterm
