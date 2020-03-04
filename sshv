@@ -156,8 +156,8 @@ open_json() {
   cp ~/.sshv/inventory ~/.sshv/inventory.json
   if [[ ! -f ~/.sshv/inventory.json ]]; then echo "Error: $HOME/.sshv/inventory.json not found. Try updating sshv like this: sshv -u"; exit 1; fi
 
-  if ! nvim ~/.sshv/inventory.json -c 'set nu | setf javascript' &> /dev/null; then
-    if ! vim ~/.sshv/inventory.json -c 'set nu | setf javascript' &> /dev/null; then
+  if ! nvim ~/.sshv/inventory.json -c 'set nu | setf javascript' 2> /dev/null; then
+    if ! vim ~/.sshv/inventory.json -c 'set nu | setf javascript' 2> /dev/null; then
       if ! vi ~/.sshv/inventory.json -c 'set nu | setf javascript'; then
         echo "Could not open $HOME/.sshv/inventory.json. Try opening it manually."
         exit 1
