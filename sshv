@@ -20,7 +20,7 @@ set_env() {
   NC='\033[0m'
   is_authenticated="false"
   userfile="$HOME/.sshv/ad_username" # path of persisted username
-  CSV_HEADER="IPV4,HOSTNAME,ACCOUNT,API,STATE,IMAGE,TAGS"
+  CSV_HEADER="IPV4,HOSTNAME,ACCOUNT,API,STATE,IMAGE,TAGS,RAM,SOCKET,CPU,DISKS,ENV,GEO"
 }
 
 # Handle sigterm
@@ -137,7 +137,7 @@ update_sshv() {
 
 # open csv
 open_csv() {
-  echo "Trying to open $HOME/.sshv/inventory.csv."
+  echo "Trying to open $HOME/.sshv/inventory.csv"
 
   if [[ ! -f ~/.sshv/inventory.csv ]]; then echo "Error: $HOME/.sshv/inventory.csv not found. Try updating sshv like this: sshv -u"; fi
 
@@ -714,15 +714,21 @@ create_csv() {
 
 ._meta.hostvars[] |
   {
-   name:    ( ."guest.hostName"? // .fullyQualifiedDomainName? // .name? + ".regtech.cloud.ibm.com" // "null" ),
    ip:      ( .primaryIpAddress? // ."guest.ipAddress"? // .primary_network_interface?.primary_ipv4_address? // "null" ),
+   name:    ( ."guest.hostName"? // .fullyQualifiedDomainName? // .name? + ".regtech.cloud.ibm.com" // "null" ),
+   account: ( .account? // ( ."runtime.host.name"? | scan("[0-9]{6,7}") ) // "ERROR_Update_VMWare_host_field"),
+   api:     ( .source? // "null" ),
    state:   ( ."guest.guestState"? // .powerState.name? // .status.name? // .status? // (if .hardwareStatusId? == 5 then "running" else "null" end )),
-   account: (.account? // ( ."runtime.host.name"? | scan("[0-9]{6,7}") ) // "ERROR_Update_VMWare_host_field"),
-   arch:    ( ."guest.guestId"? // .image.name? // "no_image_returned" ),
-   source:  ( .source? // "vmware" ),
-   tags:    (if .tags? == null or .tags? == [] then "no_tags_returned" else (.tags|join(";")) end)
+   image:   ( ."guest.guestId"? // .image.name? // "null" ),
+   tags:    ( if .tags? == null or .tags? == [] then "null" else (.tags|join(";")) end),
+   ram:     ( ."config.hardware.memoryMB"? // "null" ),
+   socket:  ( ."config.hardware.numCoresPerSocket"? // "null" ),
+   cpu:     ( ."config.hardware.numCPU"? // .vcpu?.count // "null" ),
+   disks:   ( if .harddisks? == null or .harddisks? == [] then "null" else (.harddisks|length) end ),
+   env:     ( if .tags? == null or .tags? == [] then "null" else (.tags|join(";") | sub("-allhosts";"")) end),
+   geo:     ( .datacenter.name? // if .datacenter? == null or .datacenter? == [] then "unknown" else .datacenter end),
   }
-| [.ip, .name, .account, .source, .state, .arch, .tags]|@csv
+| [.ip, .name, .account, .api, .state, .image, .tags, .ram, .socket, .cpu, .disks, .env, .geo]|@csv
 EOF
 
   jq -er -f filter \
