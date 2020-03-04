@@ -139,12 +139,26 @@ update_sshv() {
 open_csv() {
   echo "Trying to open $HOME/.sshv/inventory.csv"
 
-  if [[ ! -f ~/.sshv/inventory.csv ]]; then echo "Error: $HOME/.sshv/inventory.csv not found. Try updating sshv like this: sshv -u"; fi
+  if [[ ! -f ~/.sshv/inventory.csv ]]; then echo "Error: $HOME/.sshv/inventory.csv not found. Try updating sshv like this: sshv -u"; exit 1; fi
 
   open ~/.sshv/inventory.csv \
     || vim ~/.sshv/inventory.csv \
     || vi ~/.sshv/inventory.csv \
     || { echo "Could not open $HOME/.sshv/inventory.csv. Try opening it manually."; exit 1; }
+
+  exit 0
+}
+
+# open json
+open_json() {
+  echo "Trying to open $HOME/.sshv/inventory.json"
+
+  cp ~/.sshv/inventory ~/.sshv/inventory.json
+  if [[ ! -f ~/.sshv/inventory.json ]]; then echo "Error: $HOME/.sshv/inventory.json not found. Try updating sshv like this: sshv -u"; exit 1; fi
+
+  vim ~/.sshv/inventory.json -c 'setf javascript; set nu' \
+    || vi ~/.sshv/inventory.json -c 'setf javascript; set nu' \
+    || { echo "Could not open $HOME/.sshv/inventory. Try opening it manually."; exit 1; }
 
   exit 0
 }
@@ -301,7 +315,8 @@ Options:
   -r, --remove        Remove sshv
   -s, --search        Search inventory. Example: sshv -s js1
   -u, --update        Update sshv, the latest hosts_ca cert, and latest inventory
-  -c, --csv           Open a csv of the latest inventory
+  -c, --csv           Open a csv of the inventory
+  -j, --json          Open a json version of the inventory
   --                  Send everything after 2 dashes as arguments to ssh, not sshv
 
 EOF
@@ -371,7 +386,7 @@ search_inventory() {
 
 # get options: https://gist.github.com/cosimo/3760587
 get_options() {
-  if ! OPTS=$(getopt -o hfrudcs: --long help,portforward,update,remove,debug,csv,search: -n 'parse-options' -- "$@"); then display_help; exit; fi
+  if ! OPTS=$(getopt -o hfrudcjs: --long help,portforward,update,remove,debug,csv,json,search: -n 'parse-options' -- "$@"); then display_help; exit; fi
   eval set -- "$OPTS"
 
   while true; do
@@ -382,6 +397,7 @@ get_options() {
              -r|--remove)       remove_sshv ; shift ;;
              -u|--update)       update_sshv ; shift ;;
              -c|--csv)          open_csv    ; shift ;;
+             -j|--json)         open_json    ; shift ;;
              -s|--search)       search_inventory "${2}"; shift ;;
              --)  shift ; args=(); until [[ -z ${1+x} ]]; do args+=("$1"); shift; done; break ;;
                        *)  echo "Internal error!" ; display_help; exit 1 ;;
