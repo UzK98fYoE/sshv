@@ -765,8 +765,8 @@ create_csv() {
    env:     ( (if .tags? == [] then "null" else .tags?|join(";") end) // "null" | sub("-allhosts";"") ),
    tags:    ( (if .tags? == [] then "null" else .tags?|join(";") end) // "null" ),
    image:   ( ."guest.guestId"? // .image.name? // .operatingSystem.softwareLicense.softwareDescription.longDescription? // "null" ),
-   uri:     ( if .vpc.name? == null then "null" else "https://cloud.ibm.com/gen1/infrastructure/virtual-server/"
-              + .id? + "/details?bss_account=" + (.crn?|scan("[0-9a-z]{32}")) + "#main" end )
+   uri:     ( if .id? == null then "null" else "https://cloud.ibm.com/gen1/infrastructure/virtual-server/"
+              + (.id? | tostring) + "/details?bss_account=" + .accountid + "#main" end )
   }
 | [.ip, .hostname, .account, .geo, .api, .state, .ram, .sockets, .cpu, .disks, .vpc, .env, .tags, .image, .uri]|@csv
 EOF
