@@ -49,7 +49,7 @@ set_traps() {
 download_inventory() {
   pushd ~/.sshv >/dev/null || exit 1
   printf "Downloading latest inventory... "
-  scp vault:inventory . >/dev/null || { echo "Error: could not download inventory."; exit 1; } # download inventory
+  scp vault:inventory . || { echo "Error: could not download inventory."; exit 1; } # download inventory
   printf "Done\n"
   popd >/dev/null || exit 1
 }
@@ -778,16 +778,17 @@ create_csv() {
    geo:     ( .datacenter.name? // .zone.name? // "null" ),
    api:     ( .source? // "null" ),
    state:   ( ."guest.guestState"? // .powerState.name? // .status.name? // .status? // (if .hardwareStatusId? == 5 then "running" else "null" end )),
-   ram:     ( ."config.hardware.memoryMB"? // .memoryCount? // .memoryCapacity? // .memory? // .maxMemory? // "null" ),
-   sockets: ( if ."config.hardware.numCPU" == null then "null" else (."config.hardware.numCPU" / ."config.hardware.numCoresPerSocket") end // "null" ),
-   cpu:     ( ."config.hardware.numCPU"? // .vcpu.count? // .processorCount? // .processorPhysicalCoreAmount? // .maxCpu? // "null" ),
+   ram:     ( ."config.hardware.memoryMB"? // .memoryCapacity? // .memory? // .maxMemory? // "null" ),
+   sockets: ( .processorCount? // if ."config.hardware.numCPU" == null then "null" else (."config.hardware.numCPU" / ."config.hardware.numCoresPerSocket") end // "null" ),
+   cpu:     ( ."config.hardware.numCPU"? // .vcpu.count? // .processorCoreAmount? // .maxCpu? // "null" ),
    disks:   ( .blockDeviceCount? // .hardDriveCount? // (.volume_attachments? | length ) // "null" ),
    vpc:     ( .vpc.name? // "null" ),
    env:     ( (if .tags? == [] then "null" else .tags?|join(";") end) // "null" | sub("-allhosts";"") ),
    tags:    ( (if .tags? == [] then "null" else .tags?|join(";") end) // "null" ),
    image:   ( ."guest.guestId"? // .image.name? // .operatingSystem.softwareLicense.softwareDescription.longDescription? // "null" ),
-   uri:     ( if .id? == null then "null" else "https://cloud.ibm.com/gen1/infrastructure/virtual-server/"
-              + (.id? | tostring) + "/details?bss_account=" + .accountid + "#main" end )
+   uri:     ( if .instancetype == null then "null" else
+                "https://cloud.ibm.com/gen1/infrastructure/" + .instancetype? + "/" + (.id? | tostring) + "/details?bss_account=" + .accountid? + "#main"
+              end)
   }
 EOF
 
