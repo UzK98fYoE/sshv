@@ -178,6 +178,18 @@ open_json() {
   exit 0
 }
 
+
+# show links to resources
+show_links() {
+  pushd ~/.sshv >/dev/null || exit 1
+
+  create_csv ".hostname, .uri" "urls.csv"
+  cat urls.csv | grep -i "https://" | column -ts, | nl -s '  ' -v0
+
+  popd >/dev/null || exit 1
+  exit 0
+}
+
 # install sshv locally
 install_local() {
   mkdir -p ~/.sshv
@@ -332,6 +344,7 @@ Options:
   -u, --update        Update sshv, the latest hosts_ca cert, and latest inventory
   -c, --csv           Open a csv of the inventory
   -j, --json          Open a json version of the inventory
+  -l, --links         Show links (URIs) to resources
   --                  Send everything after 2 dashes as arguments to ssh, not sshv
 
 EOF
@@ -401,7 +414,7 @@ search_inventory() {
 
 # get options: https://gist.github.com/cosimo/3760587
 get_options() {
-  if ! OPTS=$(getopt -o hfrudcjs: --long help,portforward,update,remove,debug,csv,json,search: -n 'parse-options' -- "$@"); then display_help; exit; fi
+  if ! OPTS=$(getopt -o hfrudcjls: --long help,portforward,update,remove,debug,csv,json,links,search: -n 'parse-options' -- "$@"); then display_help; exit; fi
   eval set -- "$OPTS"
 
   while true; do
@@ -412,7 +425,8 @@ get_options() {
              -r|--remove)       remove_sshv ; shift ;;
              -u|--update)       update_sshv ; shift ;;
              -c|--csv)          open_csv    ; shift ;;
-             -j|--json)         open_json    ; shift ;;
+             -j|--json)         open_json   ; shift ;;
+             -l|--links)        show_links  ; shift ;;
              -s|--search)       search_inventory "${2}"; shift ;;
              --)  shift ; args=(); until [[ -z ${1+x} ]]; do args+=("$1"); shift; done; break ;;
                        *)  echo "Internal error!" ; display_help; exit 1 ;;
@@ -736,6 +750,13 @@ get_inventory_refresh() {
 
 # create csv
 create_csv() {
+  fields="${1}" # fields you want in the output, optional
+  outfile="${2}" # name of output file, optional
+
+  # set a default value
+  fields=${fields:-.ip, .hostname, .account, .geo, .api, .state, .ram, .sockets, .cpu, .disks, .vpc, .env, .tags, .image, .uri}
+  outfile=${outfile:-inventory.csv}
+
   pushd ~/.sshv >/dev/null || exit 1
 
   tee filter >/dev/null <<\EOF
@@ -768,7 +789,10 @@ create_csv() {
    uri:     ( if .id? == null then "null" else "https://cloud.ibm.com/gen1/infrastructure/virtual-server/"
               + (.id? | tostring) + "/details?bss_account=" + .accountid + "#main" end )
   }
-| [.ip, .hostname, .account, .geo, .api, .state, .ram, .sockets, .cpu, .disks, .vpc, .env, .tags, .image, .uri]|@csv
+EOF
+
+  tee -a filter >/dev/null <<EOF
+| [${fields}]|@csv
 EOF
 
   jq -er -f filter \
@@ -778,7 +802,7 @@ EOF
          || echo 'Error: could not create the csv file from the inventory'
 
   # add a header
-  printf "%s\n%s\n" "${CSV_HEADER}" "$(cat inventory.stage.csv)" > inventory.csv
+  printf "%s\n%s\n" "${CSV_HEADER}" "$(cat inventory.stage.csv)" > "${outfile}"
 
   # clean up
   rm -f inventory.stage.csv
