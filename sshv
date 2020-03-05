@@ -20,7 +20,7 @@ set_env() {
   NC='\033[0m'
   is_authenticated="false"
   userfile="$HOME/.sshv/ad_username" # path of persisted username
-  CSV_HEADER="IP,HOSTNAME,ACCOUNT,GEO,API,STATE,RAM,SOCKET,CPU,DISKS,IMAGE,ENV,TAGS"
+  CSV_HEADER="IP,HOSTNAME,ACCOUNT,GEO,API,STATE,RAM,SOCKETS,CPU,DISKS,VPC,ENV,TAGS,IMAGE"
 }
 
 # Handle sigterm
@@ -42,6 +42,16 @@ set_traps() {
   # in case the user Ctrl+C'd the last run before deleting the tunnel
   trap exit_on_signal_SIGINT SIGINT
   trap exit_on_signal_SIGTERM SIGTERM
+}
+
+
+# download inventory
+download_inventory() {
+  pushd ~/.sshv >/dev/null || exit 1
+  printf "Downloading latest inventory... "
+  scp vault:inventory . >/dev/null || { echo "Error: could not download inventory."; exit 1; } # download inventory
+  printf "Done\n"
+  popd >/dev/null || exit 1
 }
 
 # seed a file. although verbose, this approach lets you seed at runtime. alternatively, seed statically in the sshv dockerfile
@@ -364,7 +374,7 @@ search_inventory() {
 
   get_inventory_refresh
   if [[ $inventory_refresh -eq 1 ]]; then
-    scp -q vault:inventory .
+    download_inventory
     update_ssh_config
   fi
 
@@ -378,7 +388,7 @@ search_inventory() {
   # print a header too if there's a result
   if [[ -s tmp ]]; then
     printf "%s\n%s\n" "${CSV_HEADER}" "$(cat tmp)" > last_search_result
-    tr ',' ' ' < last_search_result | column -t | grep --color=always -Ei "${1}|\$"
+    column -ts, < last_search_result | grep --color=always -Ei "${1}|\$"
   fi
 
   # re-enable word wrapping in the terminal, if supported
@@ -743,19 +753,20 @@ create_csv() {
   {
    ip:      ( .primaryIpAddress? // ."guest.ipAddress"? // .primary_network_interface?.primary_ipv4_address? // "null" ),
    hostname:( ."guest.hostName"? // .fullyQualifiedDomainName? // .name? + ".regtech.cloud.ibm.com" // "null" ),
-   account: ( .account? // ( ."runtime.host.name"? | scan("[0-9]{6,7}") ) // "ERROR_Update_VMWare_host_field"),
+   account: ( .account? // ( ."runtime.host.name"? | scan("[0-9]{6,7}") ) // "null"),
+   geo:     ( .datacenter.name? // .zone.name? // "null" ),
    api:     ( .source? // "null" ),
    state:   ( ."guest.guestState"? // .powerState.name? // .status.name? // .status? // (if .hardwareStatusId? == 5 then "running" else "null" end )),
-   image:   ( ."guest.guestId"? // .image.name? // "null" ),
-   tags:    ( if .tags? == null or .tags? == [] then "null" else (.tags|join(";")) end),
-   ram:     ( ."config.hardware.memoryMB"? // .maxCpu? // .memoryCapacity? // "null" ),
-   socket:  ( ."config.hardware.numCoresPerSocket"? // "null" ),
-   cpu:     ( ."config.hardware.numCPU"? // .vcpu?.count // .maxCpu? // .processorPhysicalCoreAmount? // "null" ),
-   disks:   ( if .harddisks? == null or .harddisks? == [] then "null" else (.harddisks|length) end ),
-   env:     ( if .tags? == null or .tags? == [] then "null" else (.tags|join(";") | sub("-allhosts";"")) end),
-   geo:     ( .datacenter.name? // if .datacenter? == null or .datacenter? == [] then "null" else .datacenter end),
+   ram:     ( ."config.hardware.memoryMB"? // .memoryCount? // .memoryCapacity? // .memory? // "null" ),
+   sockets: ( if ."config.hardware.numCPU" == null then "null" else (."config.hardware.numCPU" / ."config.hardware.numCoresPerSocket") end // "null" ),
+   cpu:     ( ."config.hardware.numCPU"? // .vcpu.count? // .processorCount? // .processorPhysicalCoreAmount? // "null" ),
+   disks:   ( .blockDeviceCount? // .hardDriveCount? // (.volume_attachments? | length ) // "null" ),
+   vpc:     ( .vpc.name? // "null" ),
+   env:     ( (if .tags? == [] then "null" else .tags?|join(";") end) // "null" | sub("-allhosts";"") ),
+   tags:    ( (if .tags? == [] then "null" else .tags?|join(";") end) // "null" ),
+   image:   ( ."guest.guestId"? // .image.name? // .operatingSystem.softwareLicense.softwareDescription.longDescription? // "null" )
   }
-| [.ip, .hostname, .account, .geo, .api, .state, .ram, .socket, .cpu, .disks, .image, .env, .tags]|@csv
+| [.ip, .hostname, .account, .geo, .api, .state, .ram, .sockets, .cpu, .disks, .vpc, .env, .tags, .image]|@csv
 EOF
 
   jq -er -f filter \
@@ -776,15 +787,13 @@ EOF
 update_ssh_config() {
   local tmp="$(mktemp)"
   pushd ~/.sshv &>/dev/null || { echo "could not pushd ~/.sshv"; exit; }
-  scp -q vault:inventory . # download inventory
   IFS_ORIG="${IFS}" # back up
   IFS=','
 
   # this creates ~/.sshv/inventory.csv
   create_csv
 
-  # download inventory
-  scp -q vault:inventory .
+  download_inventory
 
   # parse csv and create config fragment
   while read -r ip name account kind state image tags; do
