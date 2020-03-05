@@ -388,7 +388,7 @@ search_inventory() {
   # print a header too if there's a result
   if [[ -s tmp ]]; then
     printf "%s\n%s\n" "${CSV_HEADER}" "$(cat tmp)" > last_search_result
-    column -ts, < last_search_result | grep --color=always -Ei "${1}|\$"
+    column -ts, < last_search_result | nl -s '  ' -v0 | grep --color=always -Ei "${1}|\$"
   fi
 
   # re-enable word wrapping in the terminal, if supported
