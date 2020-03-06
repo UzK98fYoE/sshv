@@ -49,8 +49,8 @@ set_traps() {
 download_inventory() {
   pushd ~/.sshv >/dev/null || exit 1
   printf "Downloading latest inventory... "
-  scp vault:inventory . || { echo "Error: could not download inventory."; exit 1; } # download inventory
-  printf "Done\n"
+  scp vault:inventory.tgz . || { echo "Error: could not download inventory."; exit 1; } # download inventory
+  tar -xzf inventory.tgz
   popd >/dev/null || exit 1
 }
 
@@ -163,7 +163,6 @@ open_csv() {
 open_json() {
   echo "Trying to open $HOME/.sshv/inventory.json"
 
-  cp ~/.sshv/inventory ~/.sshv/inventory.json
   if [[ ! -f ~/.sshv/inventory.json ]]; then echo "Error: $HOME/.sshv/inventory.json not found. Try updating sshv like this: sshv -u"; exit 1; fi
 
   if ! nvim ~/.sshv/inventory.json -c 'set nu | setf javascript' 2> /dev/null; then
@@ -387,7 +386,6 @@ search_inventory() {
 
   get_inventory_refresh
   if [[ $inventory_refresh -eq 1 ]]; then
-    download_inventory
     update_ssh_config
   fi
 
@@ -740,8 +738,8 @@ EOF
 # if the inventory is recent, remember that
 get_inventory_refresh() {
   inventory_refresh=0
-  if [[ -f ~/.sshv/inventory ]]; then
-    count=$(( $(find ~/.sshv -name inventory -mmin +720 | wc -l) ))
+  if [[ -f ~/.sshv/inventory.json ]]; then
+    count=$(( $(find ~/.sshv -name inventory.json -mmin +720 | wc -l) ))
     [[ $count -gt 0 ]] && inventory_refresh=1
   else # file doesn't exist
     inventory_refresh=1
@@ -781,14 +779,12 @@ create_csv() {
    ram:     ( ."config.hardware.memoryMB"? // .memoryCapacity? // .memory? // .maxMemory? // "null" ),
    sockets: ( .processorCount? // if ."config.hardware.numCPU" == null then "null" else (."config.hardware.numCPU" / ."config.hardware.numCoresPerSocket") end // "null" ),
    cpu:     ( ."config.hardware.numCPU"? // .vcpu.count? // .processorCoreAmount? // .maxCpu? // "null" ),
-   disks:   ( .blockDeviceCount? // .hardDriveCount? // (.volume_attachments? | length ) // "null" ),
+   disks:   ( .blockDeviceCount? // .hardDriveCount? // (.harddisks? | length) // (.volume_attachments? | length ) // "null" ),
    vpc:     ( .vpc.name? // "null" ),
    env:     ( (if .tags? == [] then "null" else .tags?|join(";") end) // "null" | sub("-allhosts";"") ),
    tags:    ( (if .tags? == [] then "null" else .tags?|join(";") end) // "null" ),
    image:   ( ."guest.guestId"? // .image.name? // .operatingSystem.softwareLicense.softwareDescription.longDescription? // "null" ),
-   uri:     ( if .instancetype == null then "null" else
-                "https://cloud.ibm.com/gen1/infrastructure/" + .instancetype? + "/" + (.id? | tostring) + "/details?bss_account=" + .accountid? + "#main"
-              end)
+   uri:     ( .uri? // "null" )
   }
 EOF
 
@@ -797,7 +793,7 @@ EOF
 EOF
 
   jq -er -f filter \
-         < inventory \
+         < inventory.json \
          | tr -d \" \
          > inventory.stage.csv \
          || echo 'Error: could not create the csv file from the inventory'
@@ -817,10 +813,8 @@ update_ssh_config() {
   IFS_ORIG="${IFS}" # back up
   IFS=','
 
-  # this creates ~/.sshv/inventory.csv
-  create_csv
-
   download_inventory
+  create_csv
 
   # parse csv and create config fragment
   while read -r ip name account kind state image tags; do
