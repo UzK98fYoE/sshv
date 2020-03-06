@@ -20,7 +20,7 @@ set_env() {
   NC='\033[0m'
   is_authenticated="false"
   userfile="$HOME/.sshv/ad_username" # path of persisted username
-  CSV_HEADER="IP,HOSTNAME,ACCOUNT,GEO,API,STATE,RAM,SOCKETS,CPU,DISKS,VPC,ENV,TAGS,IMAGE,URI"
+  CSV_HEADER="IP,HOSTNAME,ACCOUNT,GEO,API,STATE,RAM,SOCKETS,CPU,DISKS,VPC,COST,ENV,TAGS,IMAGE,URI"
 }
 
 # Handle sigterm
@@ -49,7 +49,19 @@ set_traps() {
 download_inventory() {
   pushd ~/.sshv >/dev/null || exit 1
   printf "Downloading latest inventory... "
-  scp vault:inventory.tgz . || { echo "Error: could not download inventory."; exit 1; } # download inventory
+
+  if ! scp vault:inventory.tgz . ; then
+    # Delete previous entries (i.e., stuff between these delimiters)
+    sed '/# ---hosts begin---/,/# ---hosts end---/{//!d;}' ~/.ssh/config >/dev/null > "${tmp}" && mv -f "${tmp}" ~/.ssh/config
+
+    printf "Fixing..."
+
+    # try again
+    scp vault:inventory.tgz . || { echo "Error: could not download inventory."; exit 1; }
+
+    printf "Fixed.\n"
+  fi
+
   tar -xzf inventory.tgz
   popd >/dev/null || exit 1
 }
@@ -752,7 +764,7 @@ create_csv() {
   outfile="${2}" # name of output file, optional
 
   # set a default value
-  fields=${fields:-.ip, .hostname, .account, .geo, .api, .state, .ram, .sockets, .cpu, .disks, .vpc, .env, .tags, .image, .uri}
+  fields=${fields:-.ip, .hostname, .account, .geo, .api, .state, .ram, .sockets, .cpu, .disks, .vpc, .cost, .env, .tags, .image, .uri}
   outfile=${outfile:-inventory.csv}
 
   pushd ~/.sshv >/dev/null || exit 1
@@ -781,6 +793,7 @@ create_csv() {
    cpu:     ( ."config.hardware.numCPU"? // .vcpu.count? // .processorCoreAmount? // .maxCpu? // "null" ),
    disks:   ( .blockDeviceCount? // .hardDriveCount? // (.harddisks? | length) // (.volume_attachments? | length ) // "null" ),
    vpc:     ( .vpc.name? // "null" ),
+   cost:    ( if .billingItem.recurringFee == null then "null" else ("$" + .billingItem.recurringFee) end),
    env:     ( (if .tags? == [] then "null" else .tags?|join(";") end) // "null" | sub("-allhosts";"") ),
    tags:    ( (if .tags? == [] then "null" else .tags?|join(";") end) // "null" ),
    image:   ( ."guest.guestId"? // .image.name? // .operatingSystem.softwareLicense.softwareDescription.longDescription? // "null" ),
