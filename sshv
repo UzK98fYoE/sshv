@@ -120,6 +120,7 @@ docker run -it \\
   --mount source=sshv-usrlocalbin,target=/usr/local/bin \\
   -p 127.0.0.1:8080:8080 \\
   -p 127.0.0.1:8200:8200 \\
+  -p 127.0.0.1:8025:8025 \\
   fcienablementpublic/sshv:latest "\$@"
 
 # for debugging, type "source \$(which sshv)" and then "sshvd"
@@ -135,6 +136,7 @@ sshvd() {
     --mount source=sshv-usrlocalbin,target=/usr/local/bin \\
     -p 127.0.0.1:8080:8080 \\
     -p 127.0.0.1:8200:8200 \\
+    -p 127.0.0.1:8025:8025 \\
     --user root \\
     --entrypoint bash \\
     fcienablementpublic/sshv:latest
@@ -305,6 +307,7 @@ Host vault
    User fwd
    LocalForward ${interface}:8200 127.0.0.1:8200
    LocalForward ${interface}:8080 127.0.0.1:8080
+   LocalForward ${interface}:8025 127.0.0.1:8025
 # ---config end---
 # ---hosts begin---
 # ---hosts end---
@@ -365,7 +368,19 @@ exit
 # enable port forwards
 port_forward() {
   # see ~/.ssh/config
- printf "\nPort forwarding enabled. Options:\n  1. open vault: http://localhost:8200\n  2. open jenkins: http://localhost:8080\n  3. quit: ctrl+c\n\n"
+  echo
+  echo "Port forwarding enabled. On Mac's iterm2, press Command and click to open. Options:"
+  echo
+  echo "  +------------+--------------------------+"
+  echo "  |   Item     |         URL              |"
+  echo "  +------------+--------------------------+"
+  echo "  |  Jenkins   |   http://localhost:8080  |"
+  echo "  |  Vault     |   http://localhost:8200  |"
+  echo "  |  Mailhog   |   http://localhost:8025  |"
+  echo "  +------------+--------------------------+"
+  echo "  |  Quit      |   Ctrl+C                 |"
+  echo "  +------------+--------------------------+"
+  echo
  ssh -NT vault
  exit 0
 }
@@ -791,7 +806,8 @@ create_csv() {
    ram:     ( ."config.hardware.memoryMB"? // .memoryCapacity? // .memory? // .maxMemory? // "null" ),
    sockets: ( .processorCount? // if ."config.hardware.numCPU" == null then "null" else (."config.hardware.numCPU" / ."config.hardware.numCoresPerSocket") end // "null" ),
    cpu:     ( ."config.hardware.numCPU"? // .vcpu.count? // .processorCoreAmount? // .maxCpu? // "null" ),
-   disks:   ( .blockDeviceCount? // .hardDriveCount? // (.harddisks? | length) // (.volume_attachments? | length ) // "null" ),
+   disks:   ( .blockDeviceCount? // .hardDriveCount?
+              // if (.harddisks? | length == 0) then (.volume_attachments? | length ) // "null" else (.harddisks | length) end ),
    vpc:     ( .vpc.name? // "null" ),
    cost:    ( if .billingItem.recurringFee == null then "null" else ("$" + .billingItem.recurringFee) end),
    env:     ( (if .tags? == [] then "null" else .tags?|join(";") end) // "null" | sub("-allhosts";"") ),
