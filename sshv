@@ -798,7 +798,7 @@ create_csv() {
 ._meta.hostvars[] |
   {
    ip:      ( .primaryIpAddress? // ."guest.ipAddress"? // .primary_network_interface?.primary_ipv4_address? // "null" ),
-   hostname:( ."guest.hostName"? // .fullyQualifiedDomainName? // .name? + ".regtech.cloud.ibm.com" // "null" ),
+   hostname:( .fqdn // "null" ),
    account: ( .account? // ( ."runtime.host.name"? | scan("[0-9]{6,7}") ) // "null"),
    geo:     ( .datacenter.name? // .zone.name? // "null" ),
    api:     ( .source? // "null" ),
