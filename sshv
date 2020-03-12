@@ -803,7 +803,7 @@ create_csv() {
    geo:     ( .datacenter.name? // .zone.name? // "null" ),
    api:     ( .source? // "null" ),
    state:   ( ."guest.guestState"? // .powerState.name? // .status.name? // .status? // (if .hardwareStatusId? == 5 then "running" else "null" end )),
-   class:   ( .classification // "null" ),
+   class:   ( .classification? // "null" ),
    ram:     ( ."config.hardware.memoryMB"? // .memoryCapacity? // .memory? // .maxMemory? // "null" ),
    sockets: ( .processorCount? // if ."config.hardware.numCPU" == null then "null" else (."config.hardware.numCPU" / ."config.hardware.numCoresPerSocket") end // "null" ),
    cpu:     ( ."config.hardware.numCPU"? // .vcpu.count? // .processorCoreAmount? // .maxCpu? // "null" ),
