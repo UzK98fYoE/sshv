@@ -20,7 +20,7 @@ set_env() {
   NC='\033[0m'
   is_authenticated="false"
   userfile="$HOME/.sshv/ad_username" # path of persisted username
-  CSV_HEADER="IP,HOSTNAME,ACCOUNT,GEO,API,STATE,CLASS,SOS,RAM,SOCKETS,CPU,DISKS,VPC,COST,ENV,TAGS,IMAGE,URI"
+  CSV_HEADER="IP,HOSTNAME,ACCOUNT,GEO,API,STATE,CLASS,SOS,RAM,SOCKETS,CPU,DISKS,VLAN,VPC,COST,ENV,TAGS,IMAGE,URI"
 }
 
 # Handle sigterm
@@ -779,7 +779,7 @@ create_csv() {
   outfile="${2}" # name of output file, optional
 
   # set a default value
-  fields=${fields:-.ip, .hostname, .account, .geo, .api, .state, .class, .sos, .ram, .sockets, .cpu, .disks, .vpc, .cost, .env, .tags, .image, .uri}
+  fields=${fields:-.ip, .hostname, .account, .geo, .api, .state, .class, .sos, .ram, .sockets, .cpu, .disks, .vlan, .vpc, .cost, .env, .tags, .image, .uri}
   outfile=${outfile:-inventory.csv}
 
   pushd ~/.sshv >/dev/null || exit 1
@@ -810,6 +810,7 @@ create_csv() {
    cpu:     ( ."config.hardware.numCPU"? // .vcpu.count? // .processorCoreAmount? // .maxCpu? // "null" ),
    disks:   ( .blockDeviceCount? // .hardDriveCount?
               // if (.harddisks? | length == 0) then (.volume_attachments? | length ) // "null" else (.harddisks | length) end ),
+   vlan:    ( if .networkVlans == null then "null" else ( (.networkVlans[].vlanNumber? | tostring) + " " + .networkVlans[].name?) end),
    vpc:     ( .vpc.name? // "null" ),
    cost:    ( if .billingItem.recurringFee == null then "null" else ("$" + .billingItem.recurringFee) end),
    env:     ( (if .tags? == [] then "null" else .tags?|join(";") end) // "null" | sub("-allhosts";"") ),
