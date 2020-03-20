@@ -498,13 +498,11 @@ req_coreutils() {
   fi
 
   # if coreutils is installed correctly, then timeout should return a non-zero value
-  req_timeout() {
-    if ! timeout 1 echo &>/dev/null; then
-      echo "Error: coreutils may not be installed correctly: its timeout command " \
-           "returned an error. Try brew install coreutils or brew upgrade coreutils."
-      exit 1
-    fi
-  }
+  if ! timeout 1 echo &>/dev/null; then
+    echo "Error: coreutils may not be installed correctly: its timeout command " \
+         "returned an error. Try brew install coreutils or brew upgrade coreutils."
+    exit 1
+  fi
 }
 
 # Linux usually has getopt (which allows long options) but MacOS, which is
@@ -814,12 +812,12 @@ create_csv() {
    state:   ( ."guest.guestState"? // .powerState.name? // .status.name? // .status? // (if .hardwareStatusId? == 5 then "running" else "null" end )),
    class:   ( .classification? // "null" ),
    sos:     ( .sos? // "null" ),
-   ram:     ( ."config.hardware.memoryMB"? // if .memoryCapacity == null then "null" else .memoryCapacity * 1024 end // .memory? // .maxMemory? // "null" ),
+   ram:     ( ."config.hardware.memoryMB"? // .maxMemory? // .memory? // if .memoryCapacity == null then "null" else .memoryCapacity * 1024 end // "null" ),
    sockets: ( .processorCount? // if ."config.hardware.numCPU" == null then "null" else (."config.hardware.numCPU" / ."config.hardware.numCoresPerSocket") end // "null" ),
    cpu:     ( ."config.hardware.numCPU"? // .vcpu.count? // .processorCoreAmount? // .maxCpu? // "null" ),
    disks:   ( .blockDeviceCount? // .hardDriveCount?
               // if (.harddisks? | length == 0) then (.volume_attachments? | length ) // "null" else (.harddisks | length) end ),
-   vlan:    ( if .networkVlans == null then "null" else ( (.networkVlans[].vlanNumber? | tostring) + " " + .networkVlans[].name?) end),
+   vlan:    ( if .networkVlans == null then "null" else ( [(.networkVlans[].vlanNumber | tostring) + ":" + .networkVlans[].name]|join(";")) end),
    vpc:     ( .vpc.name? // "null" ),
    cost:    ( if .billingItem.recurringFee == null then "null" else ("$" + .billingItem.recurringFee) end),
    env:     ( (if .tags? == [] then "null" else .tags?|join(";") end) // "null" | sub("-allhosts";"") ),
