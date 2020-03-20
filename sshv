@@ -496,6 +496,15 @@ req_coreutils() {
     printf "Please install coreutils first: brew install coreutils gnu-getopt jq bash\n"
     exit 1
   fi
+
+  # if coreutils is installed correctly, then timeout should return a non-zero value
+  req_timeout() {
+    if ! timeout 1 echo &>/dev/null; then
+      echo "Error: coreutils may not be installed correctly: its timeout command " \
+           "returned an error. Try brew install coreutils or brew upgrade coreutils."
+      exit 1
+    fi
+  }
 }
 
 # Linux usually has getopt (which allows long options) but MacOS, which is
