@@ -433,12 +433,12 @@ search_inventory() {
 
   # get grep args
   tmp="${out//\//}"
-  grepargs="${tmp//Δ/ -e }"
+  grepargs="${tmp//Δ/|}"
 
   # print a header too if there's a result
   if [[ -s tmp ]]; then
     printf "%s\n%s\n" "${CSV_HEADER}" "$(cat tmp)" > last_search_result
-    column -ts, < last_search_result | nl -s '  ' -v0 | grep --color=always -i -e $grepargs -e \$
+    column -ts, < last_search_result | nl -s '  ' -v0 | grep --color=always -iE $grepargs
   fi
 
   # re-enable word wrapping in the terminal, if supported
