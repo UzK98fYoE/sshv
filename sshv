@@ -416,17 +416,29 @@ search_inventory() {
     update_ssh_config
   fi
 
-  # use grep for case-insensitive searches instead of jq's contain or ascii-downcase
-  # use grep twice because column eats colors
+  # use awk for case-insensitive searches instead of jq's contain or ascii-downcase
   grep -i "${1}"  ~/.sshv/inventory.csv > tmp
+  # build an "AND" awk command from search parameters
+  out=()
+  OIFS="${IFS}"
+  IFS='Δ'; read -a terms <<< "$(join_by 'Δ' $@)"
+  IFS="${OIFS}"
+  for i in "${terms[@]}"; do out+=("/${i}/"); done
+  out=$(join_by 'Δ' "${out[@]}")
+  command="awk '${out//Δ/' && '}' < $HOME/.sshv/inventory.csv"
+  eval "${command}" > tmp
 
   # these lines are LONG, so temporarily disable word wrapping, if terminal supports it
   printf '\033[?7l'
 
+  # get grep args
+  tmp="${out//\//}"
+  grepargs="${tmp//Δ/ -e }"
+
   # print a header too if there's a result
   if [[ -s tmp ]]; then
     printf "%s\n%s\n" "${CSV_HEADER}" "$(cat tmp)" > last_search_result
-    column -ts, < last_search_result | nl -s '  ' -v0 | grep --color=always -Ei "${1}|\$"
+    column -ts, < last_search_result | nl -s '  ' -v0 | grep --color=always -i -e $grepargs -e \$
   fi
 
   # re-enable word wrapping in the terminal, if supported
@@ -439,7 +451,7 @@ search_inventory() {
 
 # get options: https://gist.github.com/cosimo/3760587
 get_options() {
-  if ! OPTS=$(getopt -o hfrudcjls: --long help,portforward,update,remove,debug,csv,json,links,search: -n 'parse-options' -- "$@"); then display_help; exit; fi
+  if ! OPTS=$(getopt -o hfrudcjls --long help,portforward,update,remove,debug,csv,json,links,search -n 'parse-options' -- "$@"); then display_help; exit; fi
   eval set -- "$OPTS"
 
   while true; do
@@ -452,9 +464,9 @@ get_options() {
              -c|--csv)          open_csv    ; shift ;;
              -j|--json)         open_json   ; shift ;;
              -l|--links)        show_links  ; shift ;;
-             -s|--search)       search_inventory "${2}"; shift ;;
+             -s|--search)       shift; shift; search_inventory "$@" ;;
              --)  shift ; args=(); until [[ -z ${1+x} ]]; do args+=("$1"); shift; done; break ;;
-                       *)  echo "Internal error!" ; display_help; exit 1 ;;
+             *)   echo "Internal error!" ; display_help; exit 1 ;;
     esac
   done
 }
@@ -844,6 +856,9 @@ EOF
   rm -f inventory.stage.csv
   popd >/dev/null || exit 1
 }
+
+# create a "join" equivalent, a la python
+function join_by { local IFS="$1"; shift; echo "$*"; }
 
 # update ssh_config with latest inventory
 update_ssh_config() {
