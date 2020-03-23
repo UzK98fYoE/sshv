@@ -15,6 +15,7 @@ set_env() {
   MAC_GNU_GETOPT_PATH=${MAC_GNU_GETOPT_PATH:-/usr/local/opt/gnu-getopt/bin/getopt}
   URI_SCHEME=${URI_SCHEME:-http} # http for development or ssh tunnel. https for production.
   VAULT_ADDR=${VAULT_ADDR:-${URI_SCHEME}://localhost:${VAULT_PORT}}
+  BLUE='\033[0;34m'
   RED='\033[0;31m'
   GREEN='\033[0;32m'
   NC='\033[0m'
@@ -434,6 +435,7 @@ search_inventory() {
   # get grep args
   tmp="${out//\//}"
   grepargs="${tmp//Δ/|}|$"
+  export GREP_COLOR='1;34'
 
   # print a header too if there's a result
   if [[ -s tmp ]]; then
