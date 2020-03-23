@@ -434,7 +434,6 @@ search_inventory() {
   # get grep args
   tmp="${out//\//}"
   grepargs="${tmp//Δ/|}|$"
-  echo "${grepargs}"
 
   # print a header too if there's a result
   if [[ -s tmp ]]; then
