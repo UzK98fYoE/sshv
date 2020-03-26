@@ -49,6 +49,8 @@ set_traps() {
 # download inventory
 download_inventory() {
   pushd ~/.sshv >/dev/null || exit 1
+  if ! rm -f inventory.tgz inventory.json; then { echo "Error: could not delete inventory.tgz and/or inventory.json"; exit 1; }; fi
+
   printf "Downloading latest inventory... "
 
   if ! scp vault:inventory.tgz . ; then
@@ -63,7 +65,7 @@ download_inventory() {
     printf "Fixed.\n"
   fi
 
-  tar -xzf inventory.tgz
+  if ! tar -xzf inventory.tgz; then { echo "Error: could not decompress inventory.tgz"; exit 1; }; fi
   popd >/dev/null || exit 1
 }
 
@@ -873,7 +875,7 @@ update_ssh_config() {
   create_csv
 
   # parse csv and create config fragment
-  while read -r ip name account kind state image tags; do
+  while read -r ip name others; do
       if [[ "${ip}" != "null" ]]; then printf "Host %s\n  HostName %s\n" "${name}" "${ip}"; fi
     done < ~/.sshv/inventory.csv > hosts
 
