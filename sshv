@@ -21,7 +21,7 @@ set_env() {
   NC='\033[0m'
   is_authenticated="false"
   userfile="$HOME/.sshv/ad_username" # path of persisted username
-  CSV_HEADER="IP,HOSTNAME,ACCOUNT,GEO,API,STATE,CLASS,SOS,RAM,SOCKETS,CPU,DISKS,VLAN,VPC,COST,ENV,TAGS,IMAGE,URI"
+  CSV_HEADER="IP,HOSTNAME,ACCOUNT,GEO,API,STATE,CLASS,SOS,RAM,SOCKETS,CPU,DISKS,ENV,VLAN,VPC,COST,TAGS,IMAGE,URI"
 }
 
 # Handle sigterm
@@ -355,7 +355,7 @@ Options:
   -f, --portforward   Enable http://localhost:8080 and :8200. Exit with Ctrl+C
   -h, --help          Display help
   -r, --remove        Remove sshv
-  -s, --search        Search inventory. Allows multiple terms: sshv -s test production
+  -s, --search        Search inventory. Example: sshv -s js1
   -u, --update        Update sshv, the latest hosts_ca cert, and latest inventory
   -c, --csv           Open a csv of the inventory
   -j, --json          Open a json version of the inventory
@@ -800,7 +800,7 @@ create_csv() {
   outfile="${2}" # name of output file, optional
 
   # set a default value
-  fields=${fields:-.ip, .hostname, .account, .geo, .api, .state, .class, .sos, .ram, .sockets, .cpu, .disks, .vlan, .vpc, .cost, .env, .tags, .image, .uri}
+  fields=${fields:-.ip, .hostname, .account, .geo, .api, .state, .class, .sos, .ram, .sockets, .cpu, .disks, .env, .vlan, .vpc, .cost, .tags, .image, .uri}
   outfile=${outfile:-inventory.csv}
 
   pushd ~/.sshv >/dev/null || exit 1
@@ -831,10 +831,10 @@ create_csv() {
    cpu:     ( ."config.hardware.numCPU"? // .vcpu.count? // .processorCoreAmount? // .maxCpu? // "null" ),
    disks:   ( .blockDeviceCount? // .hardDriveCount?
               // if (.harddisks? | length == 0) then (.volume_attachments? | length ) // "null" else (.harddisks | length) end ),
+   env:     ( .environment? // "null" ),
    vlan:    ( if .networkVlans == null then "null" else ( [(.networkVlans[].vlanNumber | tostring) + ":" + .networkVlans[].name]|join(";")) end),
    vpc:     ( .vpc.name? // "null" ),
    cost:    ( if .billingItem.recurringFee == null then "null" else ("$" + .billingItem.recurringFee) end),
-   env:     ( (if .tags? == [] then "null" else .tags?|join(";") end) // "null" | sub("-allhosts";"") ),
    tags:    ( (if .tags? == [] then "null" else .tags?|join(";") end) // "null" ),
    image:   ( ."guest.guestId"? // .image.name? // .operatingSystem.softwareLicense.softwareDescription.longDescription? // "null" ),
    uri:     ( .uri? // "null" )
