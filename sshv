@@ -428,7 +428,7 @@ search_inventory() {
   IFS="${OIFS}"
   for i in "${terms[@]}"; do out+=("/${i}/"); done
   out=$(join_by 'Δ' "${out[@]}")
-  command="awk '${out//Δ/' && '}' < $HOME/.sshv/inventory.csv"
+  command="awk '${out//Δ/&&}' < $HOME/.sshv/inventory.csv"
   eval "${command}" > tmp
 
   # these lines are LONG, so temporarily disable word wrapping, if terminal supports it
