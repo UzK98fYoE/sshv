@@ -424,7 +424,7 @@ search_inventory() {
   # build an "AND" awk command from search parameters
   out=()
   OIFS="${IFS}"
-  IFS='Δ'; read -a terms <<< "$(join_by 'Δ' $@)"
+  IFS='Δ'; read -ra terms <<< "$(join_by 'Δ' $@)"
   IFS="${OIFS}"
   for i in "${terms[@]}"; do out+=("/${i}/"); done
   out=$(join_by 'Δ' "${out[@]}")
@@ -821,7 +821,7 @@ create_csv() {
 ._meta.hostvars[] |
   {
    ip:      ( .primaryBackendIpAddress? // ."guest.ipAddress"? // .primary_network_interface?.primary_ipv4_address? // "null" ),
-   hostname:( .fqdn // "null" ),
+   hostname:( .fqdn? | gsub(".regtech.cloud.ibm.com"; "") // "null" ),
    account: ( .account? // ( ."runtime.host.name"? | scan("[0-9]{6,7}") ) // "null"),
    geo:     ( .datacenter.name? // .zone.name? // "null" ),
    api:     ( .source? // "null" ),
