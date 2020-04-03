@@ -66,6 +66,10 @@ download_inventory() {
   fi
 
   if ! tar -xzf inventory.tgz; then { echo "Error: could not decompress inventory.tgz"; exit 1; }; fi
+
+  # touch will update the date/time of the extracted inventory.json so that get_inventory_refresh works as expected
+  if ! touch inventory.json; then { echo "Warning: could not touch inventory.json"; exit 1; }; fi
+
   popd >/dev/null || exit 1
 }
 
@@ -821,7 +825,7 @@ create_csv() {
 ._meta.hostvars[] |
   {
    ip:      ( .primaryBackendIpAddress? // ."guest.ipAddress"? // .primary_network_interface?.primary_ipv4_address? // "null" ),
-   hostname:( .fqdn? | gsub(".regtech.cloud.ibm.com"; "") // "null" ),
+   hostname:( .fqdn? | gsub("\\..*"; "") // "null" ),
    account: ( .account? // ( ."runtime.host.name"? | scan("[0-9]{6,7}") ) // "null"),
    geo:     ( .datacenter.name? // .zone.name? // "null" ),
    api:     ( .source? // "null" ),
