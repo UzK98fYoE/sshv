@@ -781,7 +781,7 @@ tee "${csrfile}" >/dev/null <<-EOF
 	"ttl"              :  "${ttl}",
 	"valid_principals" :  "${principals}",
 	"cert_type"        :  "user",
-	"key_id"           :  "sshv: FROM ${ad_username} AT $(hostname -f)$(ifconfig | awk '/inet 9./{print $2}' | head -n 1) TO ${args[@]} ON $(date -u '+%Y-%m-%d %H:%M:%S UTC')",
+	"key_id"           :  "sshv: FROM ${ad_username} AT $(hostname -f)$(ifconfig >2 /dev/null | awk '/inet 9./{print $2}' | head -n 1) TO ${args[@]} ON $(date -u '+%Y-%m-%d %H:%M:%S UTC')",
 	"critical_options" :  {},
 	"extension"        :  { "permit-pty":"", "permit-port-forwarding": "" },
 	"cert_type"        :  "user"
