@@ -430,7 +430,7 @@ search_inventory() {
   OIFS="${IFS}"
   IFS='Δ'; read -ra terms <<< "$(join_by 'Δ' $@)"
   IFS="${OIFS}"
-  for i in "${terms[@]}"; do out+=("/${i}/"); done
+  for i in "${terms[@]}"; do out+=("/${i,,}/"); done
   out=$(join_by 'Δ' "${out[@]}")
   command="awk 'tolower(\$0) ~ ${out//Δ/&&}' < $HOME/.sshv/inventory.csv"
   eval "${command}" > tmp
