@@ -837,7 +837,7 @@ create_csv() {
    sockets:    ( .processorCount? // if ."config.hardware.numCPU" == null then "null" else (."config.hardware.numCPU" / ."config.hardware.numCoresPerSocket") end // "null" ),
    cpu:        ( ."config.hardware.numCPU"? // .vcpu.count? // .processorCoreAmount? // .maxCpu? // "null" ),
    vlan:       ( if .networkVlans == null then "null" else ( [(.networkVlans[].vlanNumber | tostring) + ":" + .networkVlans[].name]|join(";")) end),
-   hypervisor: ( ."runtime.host.name"? // "null" | gsub("\\..*"; "") ),
+   hypervisor: ( ."runtime.host.name"? // "Cloud" | gsub("\\..*"; "") ),
    disks:      ( .harddisks? | join("; ") | gsub(",";"")),
    vpc:        ( .vpc.name? // "null" ),
    cost:       ( if .billingItem.recurringFee == null then "null" else ("$" + .billingItem.recurringFee) end),
