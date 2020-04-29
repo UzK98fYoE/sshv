@@ -21,7 +21,7 @@ set_env() {
   NC='\033[0m'
   is_authenticated="false"
   userfile="$HOME/.sshv/ad_username" # path of persisted username
-  CSV_HEADER="IP,HOSTNAME,ACCOUNT,GEO,API,STATE,CLASS,ENVIRONMENT,SOS,RAM,SOCKETS,CPU,DISKS,VLAN,VPC,COST,TAGS,IMAGE,URI"
+  CSV_HEADER="IP,HOSTNAME,ACCOUNT,GEO,API,STATE,CLASS,ENVIRONMENT,SOS,RAM,SOCKETS,CPU,HYPERVISOR,DISKS,VLAN,VPC,COST,TAGS,IMAGE,URI"
 }
 
 # Handle sigterm
@@ -806,7 +806,7 @@ create_csv() {
   outfile="${2}" # name of output file, optional
 
   # set a default value
-  fields=${fields:-.ip, .hostname, .account, .geo, .api, .state, .class, .env, .sos, .ram, .sockets, .cpu, .disks, .vlan, .vpc, .cost, .tags, .image, .uri}
+  fields=${fields:-.ip, .hostname, .account, .geo, .api, .state, .class, .env, .sos, .ram, .sockets, .cpu, .hypervisor, .disks, .vlan, .vpc, .cost, .tags, .image, .uri}
   outfile=${outfile:-inventory.csv}
 
   pushd ~/.sshv >/dev/null || exit 1
@@ -824,26 +824,26 @@ create_csv() {
 
 ._meta.hostvars[] |
   {
-   ip:      ( .primaryBackendIpAddress? // ."guest.ipAddress"? // .primary_network_interface?.primary_ipv4_address? // "null" ),
-   hostname:( .fqdn? | gsub("\\..*"; "") // "null" ),
-   account: ( .account? // ( ."runtime.host.name"? | scan("[0-9]{6,7}") ) // "null"),
-   geo:     ( .datacenter.name? // .zone.name? // "null" ),
-   api:     ( .source? // "null" ),
-   state:   ( ."guest.guestState"? // .powerState.name? // .status.name? // .status? // (if .hardwareStatusId? == 5 then "running" else "null" end )),
-   class:   ( .classification? // "null" ),
-   env:     ( .environment? // "null" ),
-   sos:     ( .sos? // "null" ),
-   ram:     ( ."config.hardware.memoryMB"? // .maxMemory? // .memory? // if .memoryCapacity == null then "null" else .memoryCapacity * 1024 end // "null" ),
-   sockets: ( .processorCount? // if ."config.hardware.numCPU" == null then "null" else (."config.hardware.numCPU" / ."config.hardware.numCoresPerSocket") end // "null" ),
-   cpu:     ( ."config.hardware.numCPU"? // .vcpu.count? // .processorCoreAmount? // .maxCpu? // "null" ),
-   disks:   ( .blockDeviceCount? // .hardDriveCount?
-              // if (.harddisks? | length == 0) then (.volume_attachments? | length ) // "null" else (.harddisks | length) end ),
-   vlan:    ( if .networkVlans == null then "null" else ( [(.networkVlans[].vlanNumber | tostring) + ":" + .networkVlans[].name]|join(";")) end),
-   vpc:     ( .vpc.name? // "null" ),
-   cost:    ( if .billingItem.recurringFee == null then "null" else ("$" + .billingItem.recurringFee) end),
-   tags:    ( (if .tags? == [] then "null" else .tags?|join(";") end) // "null" ),
-   image:   ( ."guest.guestId"? // .image.name? // .operatingSystem.softwareLicense.softwareDescription.longDescription? // "null" ),
-   uri:     ( .uri? // "null" )
+   ip:         ( .primaryBackendIpAddress? // ."guest.ipAddress"? // .primary_network_interface?.primary_ipv4_address? // "null" ),
+   hostname:   ( .fqdn? | gsub("\\..*"; "") // "null" ),
+   account:    ( .account? // ( ."runtime.host.name"? | scan("[0-9]{6,7}") ) // "null"),
+   geo:        ( .datacenter.name? // .zone.name? // "null" ),
+   api:        ( .source? // "null" ),
+   state:      ( ."guest.guestState"? // .powerState.name? // .status.name? // .status? // (if .hardwareStatusId? == 5 then "running" else "null" end )),
+   class:      ( .classification? // "null" ),
+   env:        ( .environment? // "null" ),
+   sos:        ( .sos? // "null" ),
+   ram:        ( ."config.hardware.memoryMB"? // .maxMemory? // .memory? // if .memoryCapacity == null then "null" else .memoryCapacity * 1024 end // "null" ),
+   sockets:    ( .processorCount? // if ."config.hardware.numCPU" == null then "null" else (."config.hardware.numCPU" / ."config.hardware.numCoresPerSocket") end // "null" ),
+   cpu:        ( ."config.hardware.numCPU"? // .vcpu.count? // .processorCoreAmount? // .maxCpu? // "null" ),
+   hypervisor: ( ."runtime.host.name"? // "null" | gsub("\\..*"; "") ),
+   disks:      ( .harddisks? | join("; ") | gsub(",";"")),
+   vlan:       ( if .networkVlans == null then "null" else ( [(.networkVlans[].vlanNumber | tostring) + ":" + .networkVlans[].name]|join(";")) end),
+   vpc:        ( .vpc.name? // "null" ),
+   cost:       ( if .billingItem.recurringFee == null then "null" else ("$" + .billingItem.recurringFee) end),
+   tags:       ( (if .tags? == [] then "null" else .tags?|join(";") end) // "null" ),
+   image:      ( ."guest.guestId"? // .image.name? // .operatingSystem.softwareLicense.softwareDescription.longDescription? // "null" ),
+   uri:        ( .uri? // "null" )
   }
 EOF
 
