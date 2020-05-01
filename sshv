@@ -161,6 +161,7 @@ EOF
 # update sshv
 update_sshv() {
   do_update_hosts_ca_key=1
+  trust_hosts_ca
   install_local
   update_ssh_config
 }
@@ -715,7 +716,7 @@ get_hosts_ca_key() {
 
 # trust the hosts ca (avoids the "The authenticity of host foo (IP) can't be established")
 trust_hosts_ca() {
-  [[ ! -f ~/.sshv/hosts_ca.pub || $do_update_hosts_ca_key -eq 1 ]] && get_hosts_ca_key
+  [[ $do_update_hosts_ca_key -eq 1 || ! -f ~/.sshv/hosts_ca.pub  ]] && get_hosts_ca_key
 
   path=/etc/ssh/ssh_known_hosts
   command1="@cert-authority * $(cat ~/.sshv/hosts_ca.pub)"
@@ -726,7 +727,7 @@ trust_hosts_ca() {
   # otherwise, continue
   comment1="# Added by sshv"
   comment2="# End of sshv"
-  sudo tee "${path}" >/dev/null <<EOF
+  sudo tee -a "${path}" >/dev/null <<EOF
 ${comment1}
 ${command1}
 ${comment2}
@@ -770,12 +771,12 @@ create_keypair() {
 #   $2 = principal requested
 #   $3 = public key to sign
 set_csr_parms() {
-local ttl=${1:-15s} # if not provided, default ttl to 15 seconds
-local principals="${2:-$ad_username},fssops"
-local pubkey=${3:-~/.ssh/id_rsa_vault.pub} # if not provided, default to this path
-local csrfile="${HOME}/.sshv/csr.json"
+  local ttl=${1:-60s} # if not provided, default ttl to 60 seconds
+  local principals="${2:-$ad_username},fssops"
+  local pubkey=${3:-~/.ssh/id_rsa_vault.pub} # if not provided, default to this path
+  local csrfile="${HOME}/.sshv/csr.json"
 
-tee "${csrfile}" >/dev/null <<-EOF
+  tee "${csrfile}" >/dev/null <<-EOF
 	{
 	"public_key"       :  "$(tr '\n' '*' <${pubkey} | sed 's/\*/\\n/g')",
 	"ttl"              :  "${ttl}",
