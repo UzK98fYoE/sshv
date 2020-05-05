@@ -350,6 +350,7 @@ Welcome to sshv
   Example: sshv user1@sshserver
   Example: sshv user1@sshserver echo "hello world"
   Example: sshv user1@sshserver -- -p 1022 echo "hello world"
+  Example: sshv user1@sshserver -- sudo tee -a /root/.ssh/authorized_keys <<< "ssh-rsa..."
 
 Description
   sshv is a wrapper for ssh. It logs into vault, creates a local ssh keypair, sends
