@@ -47,11 +47,15 @@ set_traps() {
 
 
 # download inventory
-download_inventory() {
+download_inventory_artifacts() {
   pushd ~/.sshv >/dev/null || exit 1
-  if ! rm -f inventory.tgz inventory.json; then { echo "Error: could not delete inventory.tgz and/or inventory.json"; exit 1; }; fi
 
-  printf "Downloading latest inventory... "
+  if ! rm -f inventory.tgz inventory.json inventory.csv; then
+    echo "Error: could not delete inventory.tgz and/or inventory.json"
+    exit 1
+  fi
+
+  printf "Downloading latest inventory artifacts... "
 
   if ! scp vault:inventory.tgz . ; then
     # Delete previous entries (i.e., stuff between these delimiters)
@@ -65,6 +69,7 @@ download_inventory() {
     printf "Fixed.\n"
   fi
 
+  # extract the artifacts
   if ! tar -xzf inventory.tgz; then { echo "Error: could not decompress inventory.tgz"; exit 1; }; fi
 
   # touch will update the date/time of the extracted inventory.json so that get_inventory_refresh works as expected
@@ -199,17 +204,6 @@ open_json() {
   exit 0
 }
 
-
-# show links to resources
-show_links() {
-  pushd ~/.sshv >/dev/null || exit 1
-
-  create_csv ".hostname, .uri" "urls.csv"
-  cat urls.csv | grep -i "https://" | column -ts, | nl -s '  ' -v0
-
-  popd >/dev/null || exit 1
-  exit 0
-}
 
 # install sshv locally
 install_local() {
@@ -461,7 +455,7 @@ search_inventory() {
 
 # get options: https://gist.github.com/cosimo/3760587
 get_options() {
-  if ! OPTS=$(getopt -o hfrudcjls --long help,portforward,update,remove,debug,csv,json,links,search -n 'parse-options' -- "$@"); then display_help; exit; fi
+  if ! OPTS=$(getopt -o hfrudcjs --long help,portforward,update,remove,debug,csv,json,search -n 'parse-options' -- "$@"); then display_help; exit; fi
   eval set -- "$OPTS"
 
   while true; do
@@ -473,7 +467,6 @@ get_options() {
              -u|--update)       update_sshv ; shift ;;
              -c|--csv)          open_csv    ; shift ;;
              -j|--json)         open_json   ; shift ;;
-             -l|--links)        show_links  ; shift ;;
              -s|--search)       shift; shift; search_inventory "$@" ;;
              --)  shift ; args=(); until [[ -z ${1+x} ]]; do args+=("$1"); shift; done; break ;;
              *)   echo "Internal error!" ; display_help; exit 1 ;;
@@ -877,11 +870,11 @@ update_ssh_config() {
   IFS_ORIG="${IFS}" # back up
   IFS=','
 
-  download_inventory
-  create_csv
+  download_inventory_artifacts
 
-  # parse csv and create config fragment
+  # parse resulting csv and create config fragment
   while read -r ip name others; do
+      name=${name//\.*/} # keep short name--i.e., remove the domain name
       if [[ "${ip}" != "null" ]]; then printf "Host %s\n  HostName %s\n" "${name}" "${ip}"; fi
     done < ~/.sshv/inventory.csv > hosts
 
@@ -935,7 +928,10 @@ get_cert() {
     exit 1
    fi
 
-  jq -er ".data.signed_key" < "${resfile}" >"${cert}"
+  # You MUST(?) remove the newline (tr -d '\n' ) to avoid the following error in some cases:
+  #   key_cert_check_authority: invalid certificate
+  jq -er ".data.signed_key" < "${resfile}" | tr -d '\n' >"${cert}"
+
   delete_file "${resfile}"
   delete_file "${csrfile}"
 }
