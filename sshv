@@ -47,15 +47,11 @@ set_traps() {
 
 
 # download inventory
-download_inventory_artifacts() {
+download_inventory() {
   pushd ~/.sshv >/dev/null || exit 1
+  if ! rm -f inventory.tgz inventory.json; then { echo "Error: could not delete inventory.tgz and/or inventory.json"; exit 1; }; fi
 
-  if ! rm -f inventory.tgz inventory.json inventory.csv; then
-    echo "Error: could not delete inventory.tgz and/or inventory.json"
-    exit 1
-  fi
-
-  printf "Downloading latest inventory artifacts... "
+  printf "Downloading latest inventory... "
 
   if ! scp vault:inventory.tgz . ; then
     # Delete previous entries (i.e., stuff between these delimiters)
@@ -69,7 +65,6 @@ download_inventory_artifacts() {
     printf "Fixed.\n"
   fi
 
-  # extract the artifacts
   if ! tar -xzf inventory.tgz; then { echo "Error: could not decompress inventory.tgz"; exit 1; }; fi
 
   # touch will update the date/time of the extracted inventory.json so that get_inventory_refresh works as expected
@@ -204,6 +199,17 @@ open_json() {
   exit 0
 }
 
+
+# show links to resources
+show_links() {
+  pushd ~/.sshv >/dev/null || exit 1
+
+  create_csv ".hostname, .uri" "urls.csv"
+  cat urls.csv | grep -i "https://" | column -ts, | nl -s '  ' -v0
+
+  popd >/dev/null || exit 1
+  exit 0
+}
 
 # install sshv locally
 install_local() {
@@ -455,7 +461,7 @@ search_inventory() {
 
 # get options: https://gist.github.com/cosimo/3760587
 get_options() {
-  if ! OPTS=$(getopt -o hfrudcjs --long help,portforward,update,remove,debug,csv,json,search -n 'parse-options' -- "$@"); then display_help; exit; fi
+  if ! OPTS=$(getopt -o hfrudcjls --long help,portforward,update,remove,debug,csv,json,links,search -n 'parse-options' -- "$@"); then display_help; exit; fi
   eval set -- "$OPTS"
 
   while true; do
@@ -467,6 +473,7 @@ get_options() {
              -u|--update)       update_sshv ; shift ;;
              -c|--csv)          open_csv    ; shift ;;
              -j|--json)         open_json   ; shift ;;
+             -l|--links)        show_links  ; shift ;;
              -s|--search)       shift; shift; search_inventory "$@" ;;
              --)  shift ; args=(); until [[ -z ${1+x} ]]; do args+=("$1"); shift; done; break ;;
              *)   echo "Internal error!" ; display_help; exit 1 ;;
@@ -795,6 +802,71 @@ get_inventory_refresh() {
   fi
 }
 
+# create csv
+create_csv() {
+  fields="${1}" # fields you want in the output, optional
+  outfile="${2}" # name of output file, optional
+
+  # set a default value
+  fields=${fields:-.ip, .hostname, .account, .geo, .api, .state, .class, .env, .sos, .ram, .sockets, .cpu, .vlan, .hypervisor, .disks, .vpc, .cost, .tags, .image, .uri}
+  outfile=${outfile:-inventory.csv}
+
+  pushd ~/.sshv >/dev/null || exit 1
+
+  tee filter >/dev/null <<\EOF
+# #######################################
+#            Cheatsheet
+# #######################################
+#
+# {}   = create a new object
+# ()   = expression
+# //   = if LHS isn't found, use RHS
+# |[   = reformat as an array
+# @csv = filter output as csv
+
+._meta.hostvars[] |
+  {
+   ip:         ( .primaryBackendIpAddress? // ."guest.ipAddress"? // .primary_network_interface?.primary_ipv4_address? // "null" ),
+   hostname:   ( .fqdn? | gsub("\\..*"; "") // "null" ),
+   account:    ( .account? // ( ."runtime.host.name"? | scan("[0-9]{6,7}") ) // "null"),
+   geo:        ( .datacenter.name? // .zone.name? // "null" ),
+   api:        ( .source? // "null" ),
+   state:      ( ."guest.guestState"? // .powerState.name? // .status.name? // .status? // (if .hardwareStatusId? == 5 then "running" else "null" end )),
+   class:      ( .classification? // "null" ),
+   env:        ( .environment? // "null" ),
+   sos:        ( .sos? // "null" ),
+   ram:        ( ."config.hardware.memoryMB"? // .maxMemory? // .memory? // if .memoryCapacity == null then "null" else .memoryCapacity * 1024 end // "null" ),
+   sockets:    ( .processorCount? // if ."config.hardware.numCPU" == null then "null" else (."config.hardware.numCPU" / ."config.hardware.numCoresPerSocket") end // "null" ),
+   cpu:        ( ."config.hardware.numCPU"? // .vcpu.count? // .processorCoreAmount? // .maxCpu? // "null" ),
+   vlan:       ( if .networkVlans == null then "null" else ( [(.networkVlans[].vlanNumber | tostring) + ":" + .networkVlans[].name]|join(";")) end),
+   hypervisor: ( ."runtime.host.name"? // "Cloud" | gsub("\\..*"; "") ),
+   disks:      ( .harddisks? | join("; ") | gsub(",";"")),
+   vpc:        ( .vpc.name? // "null" ),
+   cost:       ( if .billingItem.recurringFee == null then "null" else ("$" + .billingItem.recurringFee) end),
+   tags:       ( (if .tags? == [] then "null" else .tags?|join(";") end) // "null" ),
+   image:      ( ."guest.guestId"? // .image.name? // .operatingSystem.softwareLicense.softwareDescription.longDescription? // "null" ),
+   uri:        ( .uri? // "null" )
+  }
+EOF
+
+  tee -a filter >/dev/null <<EOF
+| [${fields}]|@csv
+EOF
+
+  jq -er -f filter \
+         < inventory.json \
+         | tr -d \" \
+         > inventory.stage.csv \
+         || echo 'Error: could not create the csv file from the inventory'
+
+  # add a header
+  printf "%s\n%s\n" "${CSV_HEADER}" "$(cat inventory.stage.csv)" > "${outfile}"
+
+  # clean up
+  rm -f inventory.stage.csv
+  popd >/dev/null || exit 1
+}
+
 # create a "join" equivalent, a la python
 function join_by { local IFS="$1"; shift; echo "$*"; }
 
@@ -805,11 +877,11 @@ update_ssh_config() {
   IFS_ORIG="${IFS}" # back up
   IFS=','
 
-  download_inventory_artifacts
+  download_inventory
+  create_csv
 
-  # parse resulting csv and create config fragment
+  # parse csv and create config fragment
   while read -r ip name others; do
-      name=${name//\.*/} # keep short name--i.e., remove the domain name
       if [[ "${ip}" != "null" ]]; then printf "Host %s\n  HostName %s\n" "${name}" "${ip}"; fi
     done < ~/.sshv/inventory.csv > hosts
 
@@ -893,7 +965,7 @@ delete_tunnel() {
 
   # kill them all
   if [[ ! "${tunnel_pids[*]}" == "" ]]; then
-    kill ${tunnel_pids[@]}
+    sudo kill ${tunnel_pids[@]}
   fi
 }
 
