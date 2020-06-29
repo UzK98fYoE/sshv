@@ -780,7 +780,7 @@ update_ssh_config() {
   # parse resulting csv and create config fragment
   while read -r ip name others; do
       name=${name//\.*/} # keep short name--i.e., remove the domain name
-      if [[ "${name}" == "HostName" ]]; then continue; fi # this is the csv header
+      if [[ "${name}" == "HOSTNAME" ]]; then continue; fi # this is the csv header
       if [[ "${ip}" != "null" ]]; then printf "Host %s\n  HostName %s\n" "${name}" "${ip}"; fi
     done < ~/.sshv/inventory.csv > hosts
 
