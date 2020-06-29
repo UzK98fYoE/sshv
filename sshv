@@ -10,7 +10,7 @@
 
 # Handle command line arguments / options / positional parameters
 set_env() {
-  VAULT_SSH_HOSTNAME=$(cat "$HOME/.sshv/vault_ssh_hostname" &>/dev/null)
+  VAULT_SSH_HOSTNAME=$(cat "$HOME/.sshv/vault_ssh_hostname" 2>/dev/null)
   if [[ -z "${VAULT_SSH_HOSTNAME}" ]]; then echo "Warning: $HOME/.sshv/vault_ssh_hostname is unset. That's only expected on the first run."; fi
 
   VAULT_PORT=${VAULT_PORT:-8200}
