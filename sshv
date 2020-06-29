@@ -352,19 +352,19 @@ exit
 # enable port forwards
 port_forward() {
   # see ~/.ssh/config
-  local JENKINS_URL="${VAULT_ADDR//jenkins/vault}"
-  local JENKINS_URL="${JENKINS_URL//8200/}"
+  local JENKINS_ADDR="${VAULT_ADDR//jenkins/vault}"
+  local JENKINS_ADDR="${JENKINS_ADDR//8200/}"
   echo
-  echo "Port forwarding is no longer necessary. Instead, open the Windows jump server OR open MotionPro to the ...775 account and then open"
+  echo "Port forwarding is no longer necessary. Instead, open the Windows jump server OR open MotionPro to the ...775 account and then open:"
   echo
-  echo "  +------------+---------------------------------------------+"
-  echo "  |   Item     |         URL                                 |"
-  echo "  +------------+---------------------------------------------+"
-  echo "  |  Jenkins   |   ${JENKINS_ADDR}                           |"
-  echo "  |  Vault     |   ${VAULT_ADDR}                             |"
-  echo "  +------------+---------------------------------------------+"
-  echo "  |  Quit      |   Ctrl+C                                    |"
-  echo "  +------------+---------------------------------------------+"
+  printf -- "-%.0s" {1..84}
+  printf "\n| %-20s%-60s |\n" "ITEM" "URL"
+  printf -- "-%.0s" {1..84}
+  printf "\n| %-20s%-60s |\n" "Jenkins" "${JENKINS_ADDR}"
+  printf "| %-20s%-60s |\n"   "Vault" "${VAULT_ADDR}"
+  printf -- "-%.0s" {1..84}
+  printf "\n| %-20s%-60s |\n" "Quit" "Ctrl+C"
+  printf -- "-%.0s" {1..84}
   echo
  exit 0
 }
