@@ -10,11 +10,13 @@
 
 # Handle command line arguments / options / positional parameters
 set_env() {
-  VAULT_SSH_HOSTNAME=${VAULT_SSH_HOSTNAME:-} # ssh tunnel here
+  VAULT_SSH_HOSTNAME=$(cat "$HOME/.sshv/vault_ssh_hostname")
+  if [[ -z "${VAULT_SSH_HOSTNAME}" ]]; then echo "Warning: $HOME/.sshv/vault_ssh_hostname is unset. That's only expected on the first run."; fi
+
   VAULT_PORT=${VAULT_PORT:-8200}
   MAC_GNU_GETOPT_PATH=${MAC_GNU_GETOPT_PATH:-/usr/local/opt/gnu-getopt/bin/getopt}
-  URI_SCHEME=${URI_SCHEME:-http} # http for development or ssh tunnel. https for production.
-  VAULT_ADDR=${VAULT_ADDR:-${URI_SCHEME}://localhost:${VAULT_PORT}}
+  URI_SCHEME=${URI_SCHEME:-https} # http is for development. https is for production.
+  VAULT_ADDR="${URI_SCHEME}://$(cat "$HOME/.sshv/vault_ssh_hostname"):${VAULT_PORT}" # e.g., https://vault.foo.com
   BLUE='\033[0;34m'
   RED='\033[0;31m'
   GREEN='\033[0;32m'
@@ -25,33 +27,29 @@ set_env() {
 }
 
 # Handle sigterm
-exit_on_signal_SIGINT() {
-  delete_tunnel
-  echo
-  exit 1
-}
-
-# Handle sigkill
-exit_on_signal_SIGTERM() {
-  delete_tunnel
+exit_on_signal() {
+  delete_creds
   echo
   exit 1
 }
 
 # Set traps to cleanup before ending.
 set_traps() {
-  # in case the user Ctrl+C'd the last run before deleting the tunnel
-  trap exit_on_signal_SIGINT SIGINT
-  trap exit_on_signal_SIGTERM SIGTERM
+  # in case the user Ctrl+C'd the last run
+  trap exit_on_signal INT TERM EXIT
 }
 
 
 # download inventory
-download_inventory() {
+download_inventory_artifacts() {
   pushd ~/.sshv >/dev/null || exit 1
-  if ! rm -f inventory.tgz inventory.json; then { echo "Error: could not delete inventory.tgz and/or inventory.json"; exit 1; }; fi
 
-  printf "Downloading latest inventory... "
+  if ! rm -f inventory.tgz inventory.json inventory.csv; then
+    echo "Error: could not delete inventory.tgz and/or inventory.json"
+    exit 1
+  fi
+
+  printf "Downloading latest inventory artifacts... "
 
   if ! scp vault:inventory.tgz . ; then
     # Delete previous entries (i.e., stuff between these delimiters)
@@ -65,6 +63,7 @@ download_inventory() {
     printf "Fixed.\n"
   fi
 
+  # extract the artifacts
   if ! tar -xzf inventory.tgz; then { echo "Error: could not decompress inventory.tgz"; exit 1; }; fi
 
   # touch will update the date/time of the extracted inventory.json so that get_inventory_refresh works as expected
@@ -125,9 +124,6 @@ docker run -it \\
   --mount source=sshv-$(whoami),target=/home/sshv \\
   --mount source=sshv-etcssh,target=/etc/ssh \\
   --mount source=sshv-usrlocalbin,target=/usr/local/bin \\
-  -p 127.0.0.1:8080:8080 \\
-  -p 127.0.0.1:8200:8200 \\
-  -p 127.0.0.1:8025:8025 \\
   fcienablementpublic/sshv:latest "\$@"
 
 # for debugging, type "source \$(which sshv)" and then "sshvd"
@@ -141,9 +137,6 @@ sshvd() {
     --mount source=sshv-$(whoami),target=/home/sshv \\
     --mount source=sshv-etcssh,target=/etc/ssh \\
     --mount source=sshv-usrlocalbin,target=/usr/local/bin \\
-    -p 127.0.0.1:8080:8080 \\
-    -p 127.0.0.1:8200:8200 \\
-    -p 127.0.0.1:8025:8025 \\
     --user root \\
     --entrypoint bash \\
     fcienablementpublic/sshv:latest
@@ -199,17 +192,6 @@ open_json() {
   exit 0
 }
 
-
-# show links to resources
-show_links() {
-  pushd ~/.sshv >/dev/null || exit 1
-
-  create_csv ".hostname, .uri" "urls.csv"
-  cat urls.csv | grep -i "https://" | column -ts, | nl -s '  ' -v0
-
-  popd >/dev/null || exit 1
-  exit 0
-}
 
 # install sshv locally
 install_local() {
@@ -275,7 +257,6 @@ install() {
   get_install_type
   install_executable
   get_vaulthost
-  create_vaulthost_keys
   install_vault_ssh_config
 
   # remember that we were just installed
@@ -291,7 +272,7 @@ check_containerized() {
   fi
 }
 
-# Create a secure ssh tunnel by adding an ssh_config entry
+# Create an ssh_config to refer to the vault_host generically as vault
 install_vault_ssh_config() {
   # ensure ~/.ssh exists
   mkdir -p ~/.ssh
@@ -313,9 +294,6 @@ Host vault
    IdentityFile ~/.ssh/id_ed25519_vaulthost
    CertificateFile ~/.ssh/id_ed25519_vaulthost-cert.pub
    User fwd
-   LocalForward ${interface}:8200 127.0.0.1:8200
-   LocalForward ${interface}:8080 127.0.0.1:8080
-   LocalForward ${interface}:8025 127.0.0.1:8025
 # ---config end---
 # ---hosts begin---
 # ---hosts end---
@@ -323,18 +301,6 @@ Host vault
 EOF
   [[ $? -eq 0 ]] || print "Error: could not update your ${path}\n"
 fi
-}
-
-# create an ssh tunnel to vault. The tunnel authenticates and secures traffic
-create_tunnel() {
-  if ! ssh -vvv -NfT vault &>~/.sshv/create-tunnel.log; then
-    printf "\nError: could not create ssh tunnel. Tips:\n"
-    printf "  1. Add your public key to /home/fwd/.ssh/authorized_keys on the vault server (e.g., via a Jenkins job).\n"
-    printf "  2. Set permissions on the vault server with chmod 0600 /home/fwd/.ssh/authorized_keys\n"
-    printf "  3. Check your spelling of ${RED}%s${NC}\n" "${VAULT_SSH_HOSTNAME}"
-    printf "  4. Check for networking problems reaching ${RED}%s${NC}\n\n" "${VAULT_SSH_HOSTNAME}"
-    exit 1
-  fi
 }
 
 # display help text
@@ -360,7 +326,7 @@ Description
 
 Options:
   -d, --debug         Debug mode for sshv (i.e., enable bash's set -x)
-  -f, --portforward   Enable http://localhost:8080 and :8200. Exit with Ctrl+C
+  -f, --portforward   Deprecated June 2020: used to enable http://localhost:8080 and :8200.
   -h, --help          Display help
   -r, --remove        Remove sshv
   -s, --search        Search inventory. Example: sshv -s js1
@@ -378,19 +344,7 @@ exit
 port_forward() {
   # see ~/.ssh/config
   echo
-  echo "Port forwarding enabled. On Mac's iterm2, press Command and click to open. Options:"
-  echo
-  echo "  +------------+--------------------------+"
-  echo "  |   Item     |         URL              |"
-  echo "  +------------+--------------------------+"
-  echo "  |  Jenkins   |   http://localhost:8080  |"
-  echo "  |  Vault     |   http://localhost:8200  |"
-  echo "  |  Mailhog   |   http://localhost:8025  |"
-  echo "  +------------+--------------------------+"
-  echo "  |  Quit      |   Ctrl+C                 |"
-  echo "  +------------+--------------------------+"
-  echo
- ssh -NT vault
+  echo "Port forwarding is no longer necessary. Instead, open the Windows jump server to jenkins and vault. This option and message will disappear in a future version."
  exit 0
 }
 
@@ -461,7 +415,7 @@ search_inventory() {
 
 # get options: https://gist.github.com/cosimo/3760587
 get_options() {
-  if ! OPTS=$(getopt -o hfrudcjls --long help,portforward,update,remove,debug,csv,json,links,search -n 'parse-options' -- "$@"); then display_help; exit; fi
+  if ! OPTS=$(getopt -o hfrudcjs --long help,portforward,update,remove,debug,csv,json,search -n 'parse-options' -- "$@"); then display_help; exit; fi
   eval set -- "$OPTS"
 
   while true; do
@@ -473,7 +427,6 @@ get_options() {
              -u|--update)       update_sshv ; shift ;;
              -c|--csv)          open_csv    ; shift ;;
              -j|--json)         open_json   ; shift ;;
-             -l|--links)        show_links  ; shift ;;
              -s|--search)       shift; shift; search_inventory "$@" ;;
              --)  shift ; args=(); until [[ -z ${1+x} ]]; do args+=("$1"); shift; done; break ;;
              *)   echo "Internal error!" ; display_help; exit 1 ;;
@@ -543,7 +496,7 @@ req_getopt() {
   export FLAGS_GETOPT_CMD="${MAC_GNU_GETOPT_PATH}"
 }
 
-# load or persist an ssh hostname so we can tunnel traffic to vault
+# load or persist an ssh hostname so we can contact vault
 get_vaulthost() {
   local path="$HOME/.sshv/vault_ssh_hostname"
   local hostname="vault.foo.com"
@@ -554,19 +507,6 @@ get_vaulthost() {
   fi
 
   VAULT_SSH_HOSTNAME=$(cat "${path}")
-}
-
-# create ssh key for vaulthost. this is a one-time thing
-create_vaulthost_keys() {
-  # create keys if non-existant
-  if [[ ! -f ~/.ssh/id_ed25519_vaulthost ]]; then
-    ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519_vaulthost -C "sshv temporary key" &>/dev/null <<< n # n means no to overwrite
-    printf "\nOn the vault ssh host, add the following public key to /home/fwd/.ssh/authorized_keys:\n"
-    printf "${RED}%s${NC}\n" "$(cat ~/.ssh/id_ed25519_vaulthost.pub)"
-    printf "NOTE: After this initial connection, sshv will use certificates, not keys, for authentication.\n"
-    printf "The authorized_keys entry above will be deleted automatically.\n\n"
-    read -er -p "Press Enter once added..."
-  fi
 }
 
 # Check prereqs
@@ -586,9 +526,10 @@ check_prereqs() {
 check_network() {
   # Check if curl results are meaningful. Otherwise, ssh may work to the host but vault's container isn't running.
   # On Mac, timeout is part of coreutils (then gtimeout and timeout have same sha1sum)
-  result="$(timeout 3 curl -sS --request GET http://localhost:${VAULT_PORT}/v1/auth/token/lookup)"
-  if [[ ! $result == *"missing client token"* ]]; then
-      printf "\n${RED}Error${NC}: curl -sS --request GET http://localhost:%s/v1/auth/token/lookup did ${RED}NOT${NC} return the expected \"missing client token\". Is vault running?\n\n" "${VAULT_PORT}"
+  result="$(timeout 3 curl -sS --request GET ${VAULT_ADDR}/v1/auth/token/lookup)"
+  if [[ ! "${result}" == *"missing client token"* ]]; then
+      printf "\n${RED}Error${NC}: curl -sS --request GET %s/v1/auth/token/lookup did ${RED}NOT${NC} return the expected \"missing client token\". Is vault running?\n\n" \
+        "${VAULT_ADDR}"
       exit 1
   fi
 }
@@ -802,71 +743,6 @@ get_inventory_refresh() {
   fi
 }
 
-# create csv
-create_csv() {
-  fields="${1}" # fields you want in the output, optional
-  outfile="${2}" # name of output file, optional
-
-  # set a default value
-  fields=${fields:-.ip, .hostname, .account, .geo, .api, .state, .class, .env, .sos, .ram, .sockets, .cpu, .vlan, .hypervisor, .disks, .vpc, .cost, .tags, .image, .uri}
-  outfile=${outfile:-inventory.csv}
-
-  pushd ~/.sshv >/dev/null || exit 1
-
-  tee filter >/dev/null <<\EOF
-# #######################################
-#            Cheatsheet
-# #######################################
-#
-# {}   = create a new object
-# ()   = expression
-# //   = if LHS isn't found, use RHS
-# |[   = reformat as an array
-# @csv = filter output as csv
-
-._meta.hostvars[] |
-  {
-   ip:         ( .primaryBackendIpAddress? // ."guest.ipAddress"? // .primary_network_interface?.primary_ipv4_address? // "null" ),
-   hostname:   ( .fqdn? | gsub("\\..*"; "") // "null" ),
-   account:    ( .account? // ( ."runtime.host.name"? | scan("[0-9]{6,7}") ) // "null"),
-   geo:        ( .datacenter.name? // .zone.name? // "null" ),
-   api:        ( .source? // "null" ),
-   state:      ( ."guest.guestState"? // .powerState.name? // .status.name? // .status? // (if .hardwareStatusId? == 5 then "running" else "null" end )),
-   class:      ( .classification? // "null" ),
-   env:        ( .environment? // "null" ),
-   sos:        ( .sos? // "null" ),
-   ram:        ( ."config.hardware.memoryMB"? // .maxMemory? // .memory? // if .memoryCapacity == null then "null" else .memoryCapacity * 1024 end // "null" ),
-   sockets:    ( .processorCount? // if ."config.hardware.numCPU" == null then "null" else (."config.hardware.numCPU" / ."config.hardware.numCoresPerSocket") end // "null" ),
-   cpu:        ( ."config.hardware.numCPU"? // .vcpu.count? // .processorCoreAmount? // .maxCpu? // "null" ),
-   vlan:       ( if .networkVlans == null then "null" else ( [(.networkVlans[].vlanNumber | tostring) + ":" + .networkVlans[].name]|join(";")) end),
-   hypervisor: ( ."runtime.host.name"? // "Cloud" | gsub("\\..*"; "") ),
-   disks:      ( .harddisks? | join("; ") | gsub(",";"")),
-   vpc:        ( .vpc.name? // "null" ),
-   cost:       ( if .billingItem.recurringFee == null then "null" else ("$" + .billingItem.recurringFee) end),
-   tags:       ( (if .tags? == [] then "null" else .tags?|join(";") end) // "null" ),
-   image:      ( ."guest.guestId"? // .image.name? // .operatingSystem.softwareLicense.softwareDescription.longDescription? // "null" ),
-   uri:        ( .uri? // "null" )
-  }
-EOF
-
-  tee -a filter >/dev/null <<EOF
-| [${fields}]|@csv
-EOF
-
-  jq -er -f filter \
-         < inventory.json \
-         | tr -d \" \
-         > inventory.stage.csv \
-         || echo 'Error: could not create the csv file from the inventory'
-
-  # add a header
-  printf "%s\n%s\n" "${CSV_HEADER}" "$(cat inventory.stage.csv)" > "${outfile}"
-
-  # clean up
-  rm -f inventory.stage.csv
-  popd >/dev/null || exit 1
-}
-
 # create a "join" equivalent, a la python
 function join_by { local IFS="$1"; shift; echo "$*"; }
 
@@ -877,11 +753,12 @@ update_ssh_config() {
   IFS_ORIG="${IFS}" # back up
   IFS=','
 
-  download_inventory
-  create_csv
+  download_inventory_artifacts
 
-  # parse csv and create config fragment
+  # parse resulting csv and create config fragment
   while read -r ip name others; do
+      name=${name//\.*/} # keep short name--i.e., remove the domain name
+      if [[ "${name}" == "HostName" ]]; then continue; fi # this is the csv header
       if [[ "${ip}" != "null" ]]; then printf "Host %s\n  HostName %s\n" "${name}" "${ip}"; fi
     done < ~/.sshv/inventory.csv > hosts
 
@@ -896,7 +773,12 @@ update_ssh_config() {
   # add entries
   CURRENT="$(<~/.ssh/config)"
   ADDITIONS="$(<hosts)"
-  echo "${CURRENT/'# ---hosts end---'/${ADDITIONS}$'\n'# ---hosts end---}" > ~/.ssh/config # ignore this: '}"
+  if [[ -z "${ADDITIONS}" ]]; then
+    echo "Error: $HOME/.sshv/hosts is null. Did the inventory job work? Is $HOME/.sshv/inventory.csv empty?"
+    exit 1
+  else
+    echo "${CURRENT/'# ---hosts end---'/${ADDITIONS}$'\n'# ---hosts end---}" > ~/.ssh/config # ignore this: '}"
+  fi
 
   # clean up
   IFS="${IFS_ORIG}" # restore
@@ -958,17 +840,6 @@ run_ssh() {
   fi
 }
 
-# delete the ssh tunnel created earlier to avoid port conflicts on 8200
-delete_tunnel() {
-  # build an array of all PIDs doing ssh to vault. E.g., 123 456 789
-  tunnel_pids=("$(ps ax | awk '/[s]sh -vvv -NfT vault/{print $1}' | tr '\n' ' ')")
-
-  # kill them all
-  if [[ ! "${tunnel_pids[*]}" == "" ]]; then
-    sudo kill ${tunnel_pids[@]}
-  fi
-}
-
 # run
 main() {
   set_traps
@@ -978,7 +849,6 @@ main() {
   get_options "$@"
   check_containerized
   install
-  create_tunnel
   check_network
   authenticate_to_vault
   trust_hosts_ca
@@ -987,7 +857,6 @@ main() {
   set_csr_parms
   get_cert
   run_ssh
-  delete_tunnel
 }
 
 # Start here and pass any parameters
