@@ -514,6 +514,9 @@ get_vaulthost() {
     read -er -p "Enter the vault ssh server's public hostname (FQDN or short name) or IP: " -i "${hostname}" hostname
     echo "${hostname}" > "${path}"
   fi
+
+  # this is NOT redundant because an install sets this to null. without this, install fails
+  VAULT_SSH_HOSTNAME=$(cat "${path}")
 }
 
 # Check prereqs
@@ -533,10 +536,10 @@ check_prereqs() {
 check_network() {
   # Check if curl results are meaningful. Otherwise, ssh may work to the host but vault's container isn't running.
   # On Mac, timeout is part of coreutils (then gtimeout and timeout have same sha1sum)
-  result="$(timeout 3 curl -sS --request GET ${VAULT_ADDR}/v1/auth/token/lookup)"
+  result=$(timeout 3 curl -sS --request GET "${VAULT_ADDR}/v1/auth/token/lookup")
   if [[ ! "${result}" == *"missing client token"* ]]; then
-      printf "\n${RED}Error${NC}: curl -sS --request GET %s/v1/auth/token/lookup did ${RED}NOT${NC} return the expected \"missing client token\". Is vault running?\n\n" \
-        "${VAULT_ADDR}"
+      printf "\n${RED}Error${NC}: curl -sS --request GET %s/v1/auth/token/lookup did ${RED}NOT${NC} return the expected 'missing client token'. %s" \
+             "Is vault running?\n\n" "${VAULT_ADDR}"
       exit 1
   fi
 }
