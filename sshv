@@ -781,6 +781,7 @@ update_ssh_config() {
   while read -r ip name others; do
       name=${name//\.*/} # keep short name--i.e., remove the domain name
       if [[ "${name}" == "HOSTNAME" ]]; then continue; fi # this is the csv header
+      if [[ -z "${name}" ]]; then continue; fi            # ignore nulls
       if [[ "${ip}" != "null" ]]; then printf "Host %s\n  HostName %s\n" "${name}" "${ip}"; fi
     done < ~/.sshv/inventory.csv > hosts
 
