@@ -537,7 +537,7 @@ check_network() {
   # On Mac, timeout is part of coreutils (then gtimeout and timeout have same sha1sum)
   result=$(timeout 3 curl -sS --request GET "${VAULT_ADDR}/v1/auth/token/lookup")
   if [[ ! "${result}" == *"missing client token"* ]]; then
-      printf "${RED}Error${NC}: Couldn't contact %s. If running sshv from your laptop, did you forget to connect to MotionPro VPN? Is Vault down?" "${VAULT_ADDR}"
+      printf "${RED}Error${NC}: Couldn't contact %s. If running sshv from your laptop, did you forget to connect to MotionPro VPN? Is Vault down?\n" "${VAULT_ADDR}"
       exit 1
   fi
 }
