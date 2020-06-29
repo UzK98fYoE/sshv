@@ -246,6 +246,14 @@ show_install_details() {
       echo
 }
 
+# create ssh key for vault interactions
+create_vaulthost_keys() {
+  # create keys if non-existant
+  if [[ ! -f ~/.ssh/id_ed25519_vaulthost ]]; then
+    ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519_vaulthost -C "sshv key for $(whoami)@$(hostname -f)" &>/dev/null <<< n # n means no to overwrite
+  fi
+}
+
 # Install sshv if not installed
 install() {
   # if already installed (last step of install is creating ~/.ssh/config), return (if args present) or display help (if no args present)
@@ -257,6 +265,7 @@ install() {
   get_install_type
   install_executable
   get_vaulthost
+  create_vaulthost_keys
   install_vault_ssh_config
 
   # remember that we were just installed
@@ -505,8 +514,6 @@ get_vaulthost() {
     read -er -p "Enter the vault ssh server's public hostname (FQDN or short name) or IP: " -i "${hostname}" hostname
     echo "${hostname}" > "${path}"
   fi
-
-  VAULT_SSH_HOSTNAME=$(cat "${path}")
 }
 
 # Check prereqs
