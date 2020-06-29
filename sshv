@@ -10,13 +10,13 @@
 
 # Handle command line arguments / options / positional parameters
 set_env() {
-  VAULT_SSH_HOSTNAME=$(cat "$HOME/.sshv/vault_ssh_hostname")
+  VAULT_SSH_HOSTNAME=$(cat "$HOME/.sshv/vault_ssh_hostname" &>/dev/null)
   if [[ -z "${VAULT_SSH_HOSTNAME}" ]]; then echo "Warning: $HOME/.sshv/vault_ssh_hostname is unset. That's only expected on the first run."; fi
 
   VAULT_PORT=${VAULT_PORT:-8200}
   MAC_GNU_GETOPT_PATH=${MAC_GNU_GETOPT_PATH:-/usr/local/opt/gnu-getopt/bin/getopt}
   URI_SCHEME=${URI_SCHEME:-https} # http is for development. https is for production.
-  VAULT_ADDR="${URI_SCHEME}://$(cat "$HOME/.sshv/vault_ssh_hostname"):${VAULT_PORT}" # e.g., https://vault.foo.com
+  VAULT_ADDR="${URI_SCHEME}://${VAULT_SSH_HOSTNAME}:${VAULT_PORT}" # e.g., https://vault.foo.com
   BLUE='\033[0;34m'
   RED='\033[0;31m'
   GREEN='\033[0;32m'
