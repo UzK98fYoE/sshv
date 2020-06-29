@@ -515,8 +515,9 @@ get_vaulthost() {
     echo "${hostname}" > "${path}"
   fi
 
-  # this is NOT redundant because an install sets this to null. without this, install fails
+  # this is NOT redundant because an install previously set this to null. without this, install fails
   VAULT_SSH_HOSTNAME=$(cat "${path}")
+  VAULT_ADDR="${URI_SCHEME}://${VAULT_SSH_HOSTNAME}:${VAULT_PORT}" # e.g., https://vault.foo.com
 }
 
 # Check prereqs
