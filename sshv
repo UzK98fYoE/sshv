@@ -219,7 +219,9 @@ get_install_type() {
   if ! type docker &>/dev/null; then install_type="local"; return; fi
 
   # since docker is (presumably) installed, ask to install as a container
-  read -er -p "How should I install sshv? local or container? " -i "${install_type}" install_type
+  # read -er -p "How should I install sshv? local or container? " -i "${install_type}" install_type
+  # for now, force this, until there is time to update a container-based install
+  install_type="local"
 
   # can this user run the docker command?
   if ! docker 2>/dev/null; then echo "Error running docker. Try: usermod -a -G docker $(whoami), and re-open this terminal."; exit 1; fi
