@@ -361,8 +361,8 @@ remove_sshv() {
   if [[ -f /usr/local/bin/sshv ]]; then
     local tmp=mktemp
     sed '/# Added by sshv/,/# End of sshv/d' ~/.ssh/config >/dev/null > "${tmp}" && mv -f "${tmp}" ~/.ssh/config
-    sudo sed "/# Added by sshv/,/# End of sshv/d" /etc/ssh/ssh_known_hosts 2>/dev/null \
-         | tee "${tmp}" && sudo mv "${tmp}" /etc/ssh/ssh_known_hosts
+    sudo sed "/# Added by sshv/,/# End of sshv/d" /etc/ssh/ssh_known_hosts >/dev/null \
+         | tee "${tmp}" >dev/null && sudo mv "${tmp}" /etc/ssh/ssh_known_hosts
     rm -rf ~/.sshv
     rm -f ~/.ssh/id_ed25519_vaulthost*
     sudo rm -f /usr/local/bin/sshv
