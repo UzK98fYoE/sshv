@@ -10,9 +10,7 @@
 
 # Handle command line arguments / options / positional parameters
 set_env() {
-  VAULT_SSH_HOSTNAME=$(cat "$HOME/.sshv/vault_ssh_hostname" 2>/dev/null)
-  if [[ -z "${VAULT_SSH_HOSTNAME}" ]]; then echo "Warning: $HOME/.sshv/vault_ssh_hostname is unset. That's only expected on the first run."; fi
-
+  VAULT_SSH_HOSTNAME=$(cat "$HOME/.sshv/vault_ssh_hostname" 2>/dev/null) # will be null on install, but see get_vaulthost
   VAULT_PORT=${VAULT_PORT:-8200}
   MAC_GNU_GETOPT_PATH=${MAC_GNU_GETOPT_PATH:-/usr/local/opt/gnu-getopt/bin/getopt}
   URI_SCHEME=${URI_SCHEME:-https} # http is for development. https is for production.
