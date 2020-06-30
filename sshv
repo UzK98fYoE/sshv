@@ -352,7 +352,7 @@ exit
 # enable port forwards
 port_forward() {
   # see ~/.ssh/config
-  local JENKINS_ADDR="${VAULT_ADDR//jenkins/vault}"
+  local JENKINS_ADDR="${VAULT_ADDR//vault/jenkins}"
   local JENKINS_ADDR="${JENKINS_ADDR//:8200/}"
   echo
   echo "Port forwarding is no longer necessary. Instead, open the Windows jump server OR open MotionPro to the ...775 account and then open:"
