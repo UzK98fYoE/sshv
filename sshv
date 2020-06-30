@@ -353,7 +353,7 @@ exit
 port_forward() {
   # see ~/.ssh/config
   local JENKINS_ADDR="${VAULT_ADDR//jenkins/vault}"
-  local JENKINS_ADDR="${JENKINS_ADDR//8200/}"
+  local JENKINS_ADDR="${JENKINS_ADDR//:8200/}"
   echo
   echo "Port forwarding is no longer necessary. Instead, open the Windows jump server OR open MotionPro to the ...775 account and then open:"
   echo
@@ -797,7 +797,7 @@ update_ssh_config() {
   CURRENT="$(<~/.ssh/config)"
   ADDITIONS="$(<hosts)"
   if [[ -z "${ADDITIONS}" ]]; then
-    echo "Error: $HOME/.sshv/hosts is null. Did the inventory job work? Is $HOME/.sshv/inventory.csv empty?"
+    echo "Error: $HOME/.sshv/hosts seems empty. Did the inventory job work? Is $HOME/.sshv/inventory.csv empty?"
     exit 1
   else
     echo "${CURRENT/'# ---hosts end---'/${ADDITIONS}$'\n'# ---hosts end---}" > ~/.ssh/config # ignore this: '}"
