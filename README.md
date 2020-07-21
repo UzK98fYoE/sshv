@@ -3,6 +3,7 @@
 ![configure-cas](https://gist.github.com/seanw2020/5035ca7036ac899dd3142cb004aefb34/raw/f68bf11491d563b6bfaaeb60d13e4501eb1d0f6d/configure-CAs.png)
 ![sign-and-use-certs](https://gist.github.com/seanw2020/5035ca7036ac899dd3142cb004aefb34/raw/f68bf11491d563b6bfaaeb60d13e4501eb1d0f6d/sign-and-use-certs.png)
 
+```
 Welcome to sshv
 
   Purpose: A vault-aware ssh client
@@ -31,3 +32,4 @@ Options:
   -j, --json          Open a json version of the inventory
   -l, --links         Show links (URIs) to resources
   --                  Send everything after 2 dashes as arguments to ssh, not sshv
+```
